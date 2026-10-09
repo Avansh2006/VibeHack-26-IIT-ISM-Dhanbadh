@@ -7,8 +7,10 @@ export type MemeReactionId =
   | 'unexpected-witness'
   | 'girlfriend-breakup'
   | 'judge-bribe'
+  | 'golden-samosa'
   | 'guilty-verdict'
-  | 'failed-appeal';
+  | 'failed-appeal'
+  | 'judge-collapse';
 
 export interface MemeReactionDefinition {
   id: MemeReactionId;
@@ -84,6 +86,16 @@ export const MEME_REACTIONS: Readonly<Record<MemeReactionId, MemeReactionDefinit
     cameraSpeaker: 'judge',
     mainJourney: false,
   },
+  'golden-samosa': {
+    id: 'golden-samosa',
+    src: `${import.meta.env.BASE_URL}video/golden-samosa.mp4`,
+    start: 0,
+    end: 8,
+    kicker: 'EXHIBIT ₹420 · THE GOLDEN BRIBE',
+    caption: 'The court will now taste the evidence.',
+    cameraSpeaker: 'judge',
+    mainJourney: false,
+  },
   'guilty-verdict': {
     id: 'guilty-verdict',
     src: asset('Video-58130.mp4'),
@@ -101,6 +113,16 @@ export const MEME_REACTIONS: Readonly<Record<MemeReactionId, MemeReactionDefinit
     end: 5.8,
     kicker: 'APPEAL OUTCOME · FINAL FINAL',
     caption: 'Your appeal has been emotionally processed.',
+    cameraSpeaker: 'judge',
+    mainJourney: false,
+  },
+  'judge-collapse': {
+    id: 'judge-collapse',
+    src: `${import.meta.env.BASE_URL}video/judge-collapse.mp4`,
+    start: 0,
+    end: 8,
+    kicker: 'POST-CREDITS · JUDICIAL SYSTEM FAILURE',
+    caption: 'One document too many. Court.exe has stopped responding.',
     cameraSpeaker: 'judge',
     mainJourney: false,
   },

@@ -160,6 +160,10 @@ export function CourtroomExperience({
   const [appealReveal, setAppealReveal] = useState(false);
   const [activeMeme, setActiveMeme] = useState<MemeReactionId | null>(null);
   const [verdictReady, setVerdictReady] = useState(false);
+  const [arrestResult, setArrestResult] = useState<'pending' | 'ended' | 'skipped' | 'failed'>(
+    'pending',
+  );
+  const [postCredits, setPostCredits] = useState<'idle' | 'playing' | 'complete'>('idle');
 
   // Punishment roulette & mini-game state
   const [selectedPunishment, setSelectedPunishment] = useState<PunishmentType>('mud');
@@ -182,6 +186,8 @@ export function CourtroomExperience({
   const currentMediaCancelRef = useRef<(() => void) | null>(null);
   const mardAudioRef = useRef<HTMLAudioElement | null>(null);
   const newsVideoRef = useRef<HTMLVideoElement | null>(null);
+  const arrestVideoRef = useRef<HTMLVideoElement | null>(null);
+  const arrestStartedRef = useRef(false);
   const memeReactionRef = useRef<MemeReactionHandle | null>(null);
   const mutedRef = useRef(muted);
   const witnessReadyRef = useRef(false);
@@ -222,9 +228,10 @@ export function CourtroomExperience({
   }, [muted]);
 
   useEffect(() => {
+    if (arrestResult === 'pending') return;
     startAmbience();
     return stopAudio;
-  }, [startAmbience, stopAudio]);
+  }, [arrestResult, startAmbience, stopAudio]);
 
   useEffect(() => {
     const asset = new Audio(`${import.meta.env.BASE_URL}audio/mard.mpeg`);
@@ -244,6 +251,7 @@ export function CourtroomExperience({
 
   useEffect(() => {
     if (mardAudioRef.current) mardAudioRef.current.muted = muted;
+    if (arrestVideoRef.current) arrestVideoRef.current.muted = muted;
   }, [muted]);
 
   const strikeGavel = useCallback(() => {
@@ -336,6 +344,16 @@ export function CourtroomExperience({
     [],
   );
 
+  useEffect(() => {
+    const video = arrestVideoRef.current;
+    if (!video || arrestResult !== 'pending' || arrestStartedRef.current) return;
+    arrestStartedRef.current = true;
+    video.currentTime = 0;
+    video.muted = mutedRef.current;
+    void waitForMedia(video, 30000).then(setArrestResult);
+    return () => video.pause();
+  }, [arrestResult, waitForMedia]);
+
   const cancelDirector = useCallback(() => {
     directorGeneration.current += 1;
     currentMediaCancelRef.current?.();
@@ -352,13 +370,17 @@ export function CourtroomExperience({
     const lines = dialogueForPhase(phase, verdict?.title, bribeChoice, pleaChoice);
     const perform = async () => {
       if (phase === 'verdict') setVerdictReady(false);
+      if (phase === 'bribeResult' && bribeChoice === 'samosa') {
+        await playMeme('golden-samosa');
+        if (directorGeneration.current !== generation) return;
+      }
       for (const line of lines) {
         if (directorGeneration.current !== generation) return;
         await waitForSpeech(line);
       }
       if (directorGeneration.current !== generation) return;
       if (phase === 'breakup') await playMeme('girlfriend-breakup');
-      if (phase === 'bribeResult' && bribeChoice === 'samosa') await playMeme('judge-bribe');
+      if (phase === 'bribeResult' && bribeChoice !== 'samosa') await playMeme('judge-bribe');
       if (phase === 'mouse' && selectedDefense === 'mouse') await playMeme('unexpected-witness');
       if (phase === 'verdict') await playMeme('guilty-verdict');
       if (phase === 'appeal' && selectedPunishment === 'mud') await playMeme('failed-appeal');
@@ -541,6 +563,22 @@ export function CourtroomExperience({
     setPhase('pleaResult');
   };
 
+  const startPostCredits = async () => {
+    if (postCredits !== 'idle') return;
+    cancelDirector();
+    const generation = directorGeneration.current + 1;
+    directorGeneration.current = generation;
+    setPostCredits('playing');
+    await playMeme('judge-collapse');
+    if (directorGeneration.current !== generation) return;
+    await waitForSpeech({
+      speaker: 'judge',
+      text: 'SOMEONE DOUBLE-CLICKED A PDF?! I QUIT!',
+    });
+    if (directorGeneration.current !== generation) return;
+    setPostCredits('complete');
+  };
+
   // Roulette Spin Animation
   const spinRoulette = useCallback(() => {
     if (rouletteSpinning) return;
@@ -593,6 +631,39 @@ export function CourtroomExperience({
     setPhase('appeal');
   };
 
+  if (arrestResult === 'pending') {
+    return (
+      <section className="court-arrest" data-arrest-status="playing" aria-label="Digital arrest">
+        <video
+          ref={arrestVideoRef}
+          src={`${import.meta.env.BASE_URL}video/digital-arrest.mp4`}
+          playsInline
+          preload="auto"
+          muted={muted}
+          aria-label="SWAT officers arrest a computer mouse"
+        />
+        <div className="court-arrest-shade" aria-hidden="true" />
+        <div className="court-arrest-copy">
+          <span>DIGITAL ARREST WARRANT · CLICK UNIT 13</span>
+          <h1>YOU ARE UNDER ARREST FOR FIRST-DEGREE CLICKING.</h1>
+        </div>
+        <div className="court-arrest-controls">
+          <button type="button" onClick={() => currentMediaCancelRef.current?.()}>
+            <FastForward aria-hidden="true" size={16} /> Skip arrest
+          </button>
+          <button type="button" onClick={toggleMute} aria-pressed={muted}>
+            {muted ? (
+              <VolumeX aria-hidden="true" size={16} />
+            ) : (
+              <Volume2 aria-hidden="true" size={16} />
+            )}
+            {muted ? 'Unmute' : 'Mute'}
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <div
       className={`court-experience court-phase-${phase}`}
@@ -603,6 +674,8 @@ export function CourtroomExperience({
       data-tts-supported={voices.supported}
       data-active-speaker={activeLine?.speaker ?? 'none'}
       data-witness-ready={witnessReady}
+      data-arrest-status={arrestResult}
+      data-post-credits={postCredits}
     >
       <div className="court-canvas" aria-hidden="true">
         {webGlSupported ? (
@@ -1137,11 +1210,33 @@ export function CourtroomExperience({
             verdict={verdict}
             punishment={punishmentSentence}
             onReplay={() => {
-              skipVoice();
+              cancelDirector();
               stopAudio();
               onReplay();
             }}
           />
+          <button
+            type="button"
+            className="court-secret-ending"
+            disabled={postCredits !== 'idle'}
+            onClick={() => void startPostCredits()}
+          >
+            {postCredits === 'idle'
+              ? 'Secret Ending'
+              : postCredits === 'playing'
+                ? 'Post-credits scene playing…'
+                : 'Secret ending unlocked'}
+          </button>
+          {postCredits !== 'idle' ? (
+            <section className={`court-post-credits is-${postCredits}`} aria-live="assertive">
+              <span>POST-CREDITS · COURT.EXE</span>
+              <strong>
+                {postCredits === 'complete'
+                  ? 'SOMEONE DOUBLE-CLICKED A PDF?! I QUIT!'
+                  : 'Judicial stability critically low…'}
+              </strong>
+            </section>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -1225,7 +1320,7 @@ function dialogueForPhase(
   if (phase === 'bribeResult') {
     if (bribeChoice === 'samosa')
       return [
-        { speaker: 'judge', text: 'Samosa accepted. Excellent crust. Sentence doubled.' },
+        { speaker: 'judge', text: 'BRIBE ACCEPTED! SENTENCE DOUBLED!' },
         { speaker: 'prosecutor', text: 'Your Honor just deep-fried due process.' },
       ];
     if (bribeChoice === 'star')

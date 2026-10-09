@@ -13,6 +13,7 @@ const fastMode = process.env.CLICKPOCALYPSE_FAST === '1';
 const mobileViewport = process.env.CLICKPOCALYPSE_MOBILE === '1';
 const mouseDefense = process.env.CLICKPOCALYPSE_MOUSE_DEFENSE === '1';
 const skipMemes = process.env.CLICKPOCALYPSE_SKIP_MEMES === '1';
+const skipArrest = process.env.CLICKPOCALYPSE_SKIP_ARREST === '1';
 
 const browserCandidates = [
   process.env.CHROME_PATH,
@@ -65,7 +66,17 @@ try {
         const pause = (duration = 100) => new Promise((resolve) => setTimeout(resolve, duration));
         const memeReactions = [];
         const skippedMemeReactions = [];
+        const arrestStatuses = [];
         const memeObserver = new MutationObserver(() => {
+          const arrestStatus = document
+            .querySelector('[data-arrest-status]')
+            ?.getAttribute('data-arrest-status');
+          if (arrestStatus && arrestStatuses.at(-1) !== arrestStatus) {
+            arrestStatuses.push(arrestStatus);
+            if (${skipArrest} && arrestStatus === 'playing') {
+              document.querySelector('.court-arrest-controls button')?.click();
+            }
+          }
           const reaction = document
             .querySelector('[data-meme-reaction]')
             ?.getAttribute('data-meme-reaction');
@@ -77,7 +88,7 @@ try {
             }
           }
         });
-        memeObserver.observe(document.body, { subtree: true, attributes: true });
+        memeObserver.observe(document.body, { subtree: true, attributes: true, childList: true });
         const click = async (label, selector = 'button') => {
           const deadline = Date.now() + 60000;
           while (Date.now() < deadline) {
@@ -203,6 +214,20 @@ try {
         await click('Accept Eternal Ban & View Certificate');
         await pause(600);
         const certificatePassed = document.body.innerText.includes('Certified Digital Menace');
+        await click('Secret Ending');
+        const postCreditsDeadline = Date.now() + 30000;
+        while (
+          Date.now() < postCreditsDeadline &&
+          document
+            .querySelector('[data-post-credits]')
+            ?.getAttribute('data-post-credits') !== 'complete'
+        ) {
+          await pause(40);
+        }
+        const postCreditsPassed =
+          document.querySelector('[data-post-credits]')?.getAttribute('data-post-credits') ===
+            'complete' &&
+          document.body.innerText.includes('SOMEONE DOUBLE-CLICKED A PDF?! I QUIT!');
 
         return {
           mudPassed,
@@ -217,6 +242,8 @@ try {
           newsResult,
           memeReactions,
           skippedMemeReactions,
+          arrestStatuses,
+          postCreditsPassed,
         };
       })()
     `,
@@ -261,6 +288,7 @@ try {
     !state?.mudPassed ||
     !state?.appealPassed ||
     !state?.certificatePassed ||
+    !state?.postCreditsPassed ||
     !state?.hasPunishmentOnCertificate ||
     !['defendant', 'prosecutor', 'judge', 'complete'].every((step) =>
       state?.openingSteps?.includes(step),
@@ -276,11 +304,13 @@ try {
       'samosa-rebuttal',
       'girlfriend-evidence',
       'girlfriend-breakup',
-      'judge-bribe',
+      'golden-samosa',
       'guilty-verdict',
       'failed-appeal',
+      'judge-collapse',
     ].every((reaction) => state?.memeReactions?.includes(reaction)) ||
     (mouseDefense && !state?.memeReactions?.includes('unexpected-witness')) ||
+    !state?.arrestStatuses?.some((status) => ['ended', 'skipped'].includes(status)) ||
     (skipMemes && state?.skippedMemeReactions?.length !== state?.memeReactions?.length)
   ) {
     throw new Error('Courtroom interactive comedy game verification failed.');

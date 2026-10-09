@@ -921,3 +921,165 @@
     transform: none;
   }
 }
+
+.court-arrest {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  overflow: hidden;
+  background: #07080b;
+  color: white;
+}
+
+.court-arrest video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  animation: court-arrest-arrive 420ms ease-out both;
+}
+
+.court-arrest-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(2, 3, 8, 0.06),
+    rgba(2, 3, 8, 0.14) 48%,
+    rgba(2, 3, 8, 0.9)
+  );
+  pointer-events: none;
+}
+
+.court-arrest-copy {
+  position: absolute;
+  left: clamp(1rem, 6vw, 6rem);
+  right: clamp(1rem, 6vw, 6rem);
+  bottom: clamp(5.5rem, 12vh, 9rem);
+  max-width: 70rem;
+  text-shadow: 0 0.25rem 1.4rem #000;
+}
+
+.court-arrest-copy span {
+  color: #ffcf55;
+  font-size: clamp(0.6rem, 1.2vw, 0.82rem);
+  font-weight: 950;
+  letter-spacing: 0.2em;
+}
+
+.court-arrest-copy h1 {
+  max-width: 18ch;
+  margin: 0.5rem 0 0;
+  font-family: Georgia, serif;
+  font-size: clamp(2rem, 6.6vw, 6rem);
+  line-height: 0.92;
+  letter-spacing: -0.055em;
+}
+
+.court-arrest-controls {
+  position: absolute;
+  right: clamp(0.75rem, 3vw, 2rem);
+  bottom: clamp(0.75rem, 3vw, 2rem);
+  display: flex;
+  gap: 0.5rem;
+}
+
+.court-arrest-controls button,
+.court-secret-ending {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  padding: 0 1rem;
+  background: rgba(5, 6, 9, 0.82);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 850;
+}
+
+.court-arrest-controls button:hover,
+.court-secret-ending:hover {
+  border-color: #ffcf55;
+}
+
+.court-secret-ending {
+  position: fixed;
+  right: clamp(1rem, 3vw, 2rem);
+  bottom: clamp(1rem, 3vw, 2rem);
+  z-index: 33;
+  border-color: rgba(242, 190, 66, 0.55);
+  background: #16100a;
+  color: #ffdf86;
+}
+
+.court-secret-ending:disabled {
+  opacity: 0.62;
+}
+
+.court-post-credits {
+  position: fixed;
+  left: 50%;
+  bottom: clamp(4.6rem, 9vw, 6rem);
+  z-index: 32;
+  display: grid;
+  width: min(90vw, 46rem);
+  gap: 0.35rem;
+  border: 1px solid rgba(242, 190, 66, 0.48);
+  padding: 1rem 1.2rem;
+  background: rgba(9, 7, 8, 0.94);
+  color: white;
+  transform: translateX(-50%);
+  text-align: center;
+}
+
+.court-post-credits span {
+  color: #f2be42;
+  font-size: 0.6rem;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+}
+
+.court-post-credits strong {
+  font-family: Georgia, serif;
+  font-size: clamp(1rem, 2.8vw, 1.65rem);
+}
+
+@keyframes court-arrest-arrive {
+  from {
+    opacity: 0.5;
+    transform: scale(1.025);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .court-arrest video {
+    object-position: center;
+  }
+  .court-arrest-copy {
+    bottom: 7.5rem;
+  }
+  .court-arrest-controls {
+    left: 0.75rem;
+    right: 0.75rem;
+    justify-content: flex-end;
+  }
+  .court-secret-ending {
+    left: 1rem;
+    right: 1rem;
+    width: calc(100% - 2rem);
+  }
+  .court-post-credits {
+    bottom: 4.8rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .court-arrest video {
+    animation: none;
+  }
+}
