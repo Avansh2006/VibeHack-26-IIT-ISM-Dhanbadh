@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { existsSync } from 'node:fs';
-import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -9,6 +9,7 @@ import path from 'node:path';
 const previewUrl = process.env.CLICKPOCALYPSE_PREVIEW_URL ?? 'http://127.0.0.1:4173';
 const reducedMotion = process.env.CLICKPOCALYPSE_REDUCED_MOTION === '1';
 const mobileViewport = process.env.CLICKPOCALYPSE_MOBILE === '1';
+const screenshotPath = process.env.CLICKPOCALYPSE_SCREENSHOT_PATH;
 const browserCandidates = [
   process.env.CHROME_PATH,
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
@@ -31,7 +32,7 @@ const browserArguments = [
   '--remote-allow-origins=*',
   `--remote-debugging-port=${port}`,
   `--user-data-dir=${profileDirectory}`,
-  ...(mobileViewport ? ['--window-size=390,844'] : []),
+  `--window-size=${mobileViewport ? '390,844' : '1440,900'}`,
   ...(reducedMotion ? ['--force-prefers-reduced-motion'] : []),
   previewUrl,
 ];
@@ -92,7 +93,8 @@ try {
         await click('Test structural integrity');
         await click('Decline pixel demands');
         await click('PROVE MY INNOCENCE');
-        await pause(1400);
+        await pause(${screenshotPath ? '3000' : '1400'});
+        if (${Boolean(screenshotPath)}) return { courtroomReady: true };
         await click('Face the extremely online judge');
         await click('Attempt a legally questionable defense');
         await click('I was framed by JavaScript');
@@ -110,6 +112,18 @@ try {
   });
 
   const journeyState = journeyResult.result?.value;
+  if (screenshotPath && journeyState?.courtroomReady) {
+    const screenshot = await send('Page.captureScreenshot', {
+      format: 'png',
+      captureBeyondViewport: false,
+    });
+    await writeFile(screenshotPath, Buffer.from(screenshot.data, 'base64'));
+    process.stdout.write(`${JSON.stringify({ browser: path.basename(browserPath), screenshotPath })}\n`);
+    socket.close();
+    browser.kill();
+    await rm(temporaryRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 150 });
+    process.exit(0);
+  }
   if (!journeyState?.certificateVisible) {
     throw new Error('The browser journey did not reach the Digital Menace certificate.');
   }
