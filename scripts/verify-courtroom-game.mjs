@@ -11,6 +11,8 @@ const witnessScreenshotPath = process.env.CLICKPOCALYPSE_WITNESS_SCREENSHOT;
 const sceneScreenshotPath = process.env.CLICKPOCALYPSE_SCENE_SCREENSHOT;
 const fastMode = process.env.CLICKPOCALYPSE_FAST === '1';
 const mobileViewport = process.env.CLICKPOCALYPSE_MOBILE === '1';
+const mouseDefense = process.env.CLICKPOCALYPSE_MOUSE_DEFENSE === '1';
+const skipMemes = process.env.CLICKPOCALYPSE_SKIP_MEMES === '1';
 
 const browserCandidates = [
   process.env.CHROME_PATH,
@@ -61,6 +63,21 @@ try {
     expression: `
       (async () => {
         const pause = (duration = 100) => new Promise((resolve) => setTimeout(resolve, duration));
+        const memeReactions = [];
+        const skippedMemeReactions = [];
+        const memeObserver = new MutationObserver(() => {
+          const reaction = document
+            .querySelector('[data-meme-reaction]')
+            ?.getAttribute('data-meme-reaction');
+          if (reaction && reaction !== 'none' && memeReactions.at(-1) !== reaction) {
+            memeReactions.push(reaction);
+            if (${skipMemes}) {
+              document.querySelector('.meme-reaction > button')?.click();
+              skippedMemeReactions.push(reaction);
+            }
+          }
+        });
+        memeObserver.observe(document.body, { subtree: true, attributes: true });
         const click = async (label, selector = 'button') => {
           const deadline = Date.now() + 60000;
           while (Date.now() < deadline) {
@@ -141,7 +158,7 @@ try {
           .querySelector('[data-news-result]')
           ?.getAttribute('data-news-result');
         await click('Attempt a legally questionable defense');
-        await click('I was framed by JavaScript');
+        await click(${JSON.stringify(mouseDefense ? 'My mouse did it' : 'I was framed by JavaScript')});
         if (${Boolean(process.env.CLICKPOCALYPSE_SCENE_SCREENSHOT)}) {
           const captureDeadline = Date.now() + 60000;
           while (Date.now() < captureDeadline) {
@@ -176,7 +193,10 @@ try {
 
         // Trigger appeal
         await click('File an Immediate Appeal');
-        await pause(800);
+        const appealDeadline = Date.now() + 30000;
+        while (Date.now() < appealDeadline && !document.body.innerText.includes('APPEAL DENIED')) {
+          await pause(40);
+        }
         const appealPassed = document.body.innerText.includes('APPEAL DENIED');
 
         // Advance to certificate
@@ -195,6 +215,8 @@ try {
           storyPhases,
           witnessLines,
           newsResult,
+          memeReactions,
+          skippedMemeReactions,
         };
       })()
     `,
@@ -248,7 +270,18 @@ try {
     !['news', 'witness', 'evidence'].every((phase) => state?.storyPhases?.includes(phase)) ||
     state?.newsResult !== 'ended' ||
     !state?.witnessLines?.some((line) => line.includes('localhost girlfriend')) ||
-    !state?.witnessLines?.some((line) => line.includes("couldn't even commit"))
+    !state?.witnessLines?.some((line) => line.includes("couldn't even commit")) ||
+    ![
+      'innocence-claim',
+      'samosa-rebuttal',
+      'girlfriend-evidence',
+      'girlfriend-breakup',
+      'judge-bribe',
+      'guilty-verdict',
+      'failed-appeal',
+    ].every((reaction) => state?.memeReactions?.includes(reaction)) ||
+    (mouseDefense && !state?.memeReactions?.includes('unexpected-witness')) ||
+    (skipMemes && state?.skippedMemeReactions?.length !== state?.memeReactions?.length)
   ) {
     throw new Error('Courtroom interactive comedy game verification failed.');
   }

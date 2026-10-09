@@ -9,6 +9,12 @@ import {
 } from '@/audio';
 import { DigitalMenaceCertificate } from '@/components/certificate';
 import {
+  MemeReaction,
+  type MemePlaybackResult,
+  type MemeReactionHandle,
+} from '@/components/courtroom/MemeReaction';
+import type { MemeReactionDefinition, MemeReactionId } from '@/components/courtroom/memeReactions';
+import {
   DEFENSE_OPTIONS,
   getVerdict,
   selectCourtroomExhibits,
@@ -152,6 +158,8 @@ export function CourtroomExperience({
   const [pleaChoice, setPleaChoice] = useState<PleaChoice | null>(null);
   const [innocenceClaims, setInnocenceClaims] = useState(0);
   const [appealReveal, setAppealReveal] = useState(false);
+  const [activeMeme, setActiveMeme] = useState<MemeReactionId | null>(null);
+  const [verdictReady, setVerdictReady] = useState(false);
 
   // Punishment roulette & mini-game state
   const [selectedPunishment, setSelectedPunishment] = useState<PunishmentType>('mud');
@@ -174,6 +182,7 @@ export function CourtroomExperience({
   const currentMediaCancelRef = useRef<(() => void) | null>(null);
   const mardAudioRef = useRef<HTMLAudioElement | null>(null);
   const newsVideoRef = useRef<HTMLVideoElement | null>(null);
+  const memeReactionRef = useRef<MemeReactionHandle | null>(null);
   const mutedRef = useRef(muted);
   const witnessReadyRef = useRef(false);
   const witnessReadyResolverRef = useRef<(() => void) | null>(null);
@@ -241,6 +250,29 @@ export function CourtroomExperience({
     setGavelPulse((value) => value + 1);
     playCue('gavel');
   }, [playCue]);
+
+  const handleMemeActiveChange = useCallback((reaction: MemeReactionDefinition | null) => {
+    setActiveMeme(reaction?.id ?? null);
+    if (reaction) {
+      setActiveLine({ speaker: reaction.cameraSpeaker, text: reaction.caption });
+    }
+  }, []);
+
+  const playMeme = useCallback(
+    async (id: MemeReactionId): Promise<MemePlaybackResult> => {
+      const player = memeReactionRef.current;
+      if (!player) return 'failed';
+      skipVoice();
+      stopAudio();
+      const cancel = () => player.skip();
+      currentMediaCancelRef.current = cancel;
+      const result = await player.play(id);
+      if (currentMediaCancelRef.current === cancel) currentMediaCancelRef.current = null;
+      startAmbience();
+      return result;
+    },
+    [skipVoice, startAmbience, stopAudio],
+  );
 
   const waitForSpeech = useCallback(
     async (line: SpokenLine) => {
@@ -319,11 +351,19 @@ export function CourtroomExperience({
     directorGeneration.current = generation;
     const lines = dialogueForPhase(phase, verdict?.title, bribeChoice, pleaChoice);
     const perform = async () => {
+      if (phase === 'verdict') setVerdictReady(false);
       for (const line of lines) {
         if (directorGeneration.current !== generation) return;
         await waitForSpeech(line);
       }
       if (directorGeneration.current !== generation) return;
+      if (phase === 'breakup') await playMeme('girlfriend-breakup');
+      if (phase === 'bribeResult' && bribeChoice === 'samosa') await playMeme('judge-bribe');
+      if (phase === 'mouse' && selectedDefense === 'mouse') await playMeme('unexpected-witness');
+      if (phase === 'verdict') await playMeme('guilty-verdict');
+      if (phase === 'appeal' && selectedPunishment === 'mud') await playMeme('failed-appeal');
+      if (directorGeneration.current !== generation) return;
+      if (phase === 'verdict') setVerdictReady(true);
       setActiveLine(null);
       if (phase === 'breakup') {
         setPhase('evidence');
@@ -358,7 +398,18 @@ export function CourtroomExperience({
     };
     void perform();
     return cancelDirector;
-  }, [bribeChoice, cancelDirector, phase, playCue, pleaChoice, verdict?.title, waitForSpeech]);
+  }, [
+    bribeChoice,
+    cancelDirector,
+    phase,
+    playCue,
+    playMeme,
+    pleaChoice,
+    selectedDefense,
+    selectedPunishment,
+    verdict?.title,
+    waitForSpeech,
+  ]);
 
   const skipDialogue = () => {
     if (phase === 'news') setNewsResult('skipped');
@@ -372,6 +423,7 @@ export function CourtroomExperience({
     const generation = directorGeneration.current + 1;
     directorGeneration.current = generation;
     startAmbience();
+    await memeReactionRef.current?.prime();
     const isCurrent = () => directorGeneration.current === generation;
 
     for (const media of [mardAudioRef.current, newsVideoRef.current]) {
@@ -390,6 +442,8 @@ export function CourtroomExperience({
     setOpeningStep('defendant');
     await waitForSpeech({ speaker: 'defendant', text: 'I AM INNOCENT!' });
     if (!isCurrent()) return;
+    await playMeme('innocence-claim');
+    if (!isCurrent()) return;
 
     setOpeningStep('prosecutor');
     setActiveLine({ speaker: 'prosecutor', text: 'Ek kachori do samosa.' });
@@ -401,6 +455,8 @@ export function CourtroomExperience({
       mardResult = await waitForMedia(mard, 20000);
     }
     setOpeningAudioResult(mardResult === 'ended' ? 'ended' : 'failed');
+    if (!isCurrent()) return;
+    await playMeme('samosa-rebuttal');
     if (!isCurrent()) return;
 
     setOpeningStep('judge');
@@ -442,9 +498,11 @@ export function CourtroomExperience({
     if (!reducedMotion) {
       await new Promise((resolve) => window.setTimeout(resolve, 560));
     }
-    for (const line of dialogueForPhase('witness')) {
+    const witnessLines = dialogueForPhase('witness');
+    for (const [index, line] of witnessLines.entries()) {
       if (!isCurrent()) return;
       await waitForSpeech(line);
+      if (index === 0) await playMeme('girlfriend-evidence');
     }
     if (!isCurrent()) return;
     setActiveLine(null);
@@ -587,6 +645,12 @@ export function CourtroomExperience({
           <span>LIVE · CLICK CRIME DESK</span>
         </div>
       </div>
+      <MemeReaction
+        ref={memeReactionRef}
+        muted={muted}
+        reducedMotion={reducedMotion}
+        onActiveChange={handleMemeActiveChange}
+      />
 
       <header className="court-topbar">
         <div>
@@ -609,10 +673,12 @@ export function CourtroomExperience({
             type="button"
             className="court-control"
             onClick={skipDialogue}
-            disabled={!activeLine || (phase === 'summons' && openingStep !== 'ready')}
+            disabled={!activeLine && !activeMeme}
           >
             <FastForward aria-hidden="true" size={16} />
-            <span>{phase === 'news' ? 'Skip interruption' : 'Skip line'}</span>
+            <span>
+              {activeMeme ? 'Skip reaction' : phase === 'news' ? 'Skip interruption' : 'Skip line'}
+            </span>
           </button>
           <button
             type="button"
@@ -776,6 +842,7 @@ export function CourtroomExperience({
                 <button
                   type="button"
                   className="court-primary"
+                  disabled={!verdictReady}
                   onClick={() => {
                     strikeGavel();
                     setPhase('sponsor');
@@ -786,7 +853,7 @@ export function CourtroomExperience({
                 <button
                   type="button"
                   className="court-control"
-                  disabled={voices.speaking}
+                  disabled={!verdictReady || voices.speaking}
                   onClick={() => {
                     const next = innocenceClaims + 1;
                     setInnocenceClaims(next);
@@ -805,6 +872,7 @@ export function CourtroomExperience({
                 <button
                   type="button"
                   className="court-control"
+                  disabled={!verdictReady}
                   onClick={() => {
                     strikeGavel();
                     setPhase('certificate');
