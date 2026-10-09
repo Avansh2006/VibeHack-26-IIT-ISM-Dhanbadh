@@ -71,6 +71,9 @@ const PLASTER_WALL = '#baa188';
 const WAINSCOT_WALL = '#3d1f14';
 const CARPET_RED = '#851a26';
 const GIRLFRIEND_MODEL_URL = `${import.meta.env.BASE_URL}models/localhost-girlfriend.glb`;
+const PROSECUTOR_FLOOR_POSITION: [number, number, number] = [-4.8, 0, 0.45];
+const DEFENDANT_FLOOR_POSITION: [number, number, number] = [5.45, 0, 2.95];
+const GIRLFRIEND_FLOOR_POSITION: [number, number, number] = [7.2, 0.14, -2.62];
 
 useGLTF.preload(GIRLFRIEND_MODEL_URL);
 
@@ -120,7 +123,7 @@ export default function CourtroomScene3D(props: CourtroomScene3DProps) {
       />
       <spotLight
         position={[-6, 9, 2.5]}
-        target-position={[-5.8, 1.8, -0.8]}
+        target-position={[-4.8, 1.8, 0.45]}
         intensity={36}
         angle={0.55}
         penumbra={0.6}
@@ -139,7 +142,7 @@ export default function CourtroomScene3D(props: CourtroomScene3DProps) {
       {/* Judge rim */}
       <pointLight position={[0, 5.2, -6.8]} intensity={22} color="#ffe4ac" distance={9} />
       {/* Prosecutor rim */}
-      <pointLight position={[-7.2, 3.8, -1.8]} intensity={16} color="#ff8e7b" distance={8} />
+      <pointLight position={[-6.8, 3.8, 0.2]} intensity={16} color="#ff8e7b" distance={8} />
       {/* Defense & Defendant rim */}
       <pointLight position={[5.4, 3.8, 1.6]} intensity={18} color="#7dd5ff" distance={8} />
       {props.phase === 'witness' || props.phase === 'breakup' ? (
@@ -384,8 +387,8 @@ function CourtroomArchitecture() {
       </group>
 
       {/* Prosecution Podium & Table (Left) */}
-      <group position={[-5.8, 0, -1.0]}>
-        <Bench position={[0, 0.72, 0]} scale={[3.4, 1.4, 1.9]} />
+      <group position={[-7.25, 0, -1.15]}>
+        <Bench position={[0, 0.72, 0]} scale={[2.7, 1.4, 1.7]} />
         {/* Prosecution Briefcase */}
         <mesh castShadow position={[-0.4, 1.55, 0]}>
           <boxGeometry args={[0.9, 0.24, 0.6]} />
@@ -394,8 +397,8 @@ function CourtroomArchitecture() {
       </group>
 
       {/* Defense Table & Stand (Right) */}
-      <group position={[3.8, 0, 1.6]}>
-        <Bench position={[0, 0.68, 0]} scale={[4.2, 1.32, 1.8]} />
+      <group position={[2.25, 0, 1.35]}>
+        <Bench position={[0, 0.68, 0]} scale={[3.5, 1.32, 1.6]} />
       </group>
 
       {/* Witness Stand & Jury Box */}
@@ -570,8 +573,21 @@ function CourtroomDoors({ phase, reducedMotion }: { phase: TrialPhase; reducedMo
 function WitnessStand() {
   return (
     <group position={[7.2, 0, -2.4]}>
-      <Bench position={[0, 0.85, 0]} scale={[3.2, 1.7, 2.4]} />
-      <mesh castShadow position={[0, 1.88, -0.75]}>
+      <mesh castShadow receiveShadow position={[0, 0.06, 0]}>
+        <boxGeometry args={[3.2, 0.12, 2.4]} />
+        <meshStandardMaterial color={WOOD_MAHOGANY} roughness={0.42} />
+      </mesh>
+      <mesh castShadow receiveShadow position={[0, 0.62, 1.08]}>
+        <boxGeometry args={[3.2, 1.12, 0.16]} />
+        <meshStandardMaterial color={WOOD_MAHOGANY} roughness={0.4} />
+      </mesh>
+      {[-1.5, 1.5].map((x) => (
+        <mesh key={x} castShadow position={[x, 0.76, 0]}>
+          <boxGeometry args={[0.16, 1.4, 2.2]} />
+          <meshStandardMaterial color={WOOD_TRIM} roughness={0.4} />
+        </mesh>
+      ))}
+      <mesh castShadow position={[0, 1.38, 1.02]}>
         <boxGeometry args={[3.3, 0.18, 0.18]} />
         <meshStandardMaterial color={BRASS_GOLD} metalness={0.75} roughness={0.25} />
       </mesh>
@@ -775,7 +791,19 @@ function ProsecutorCharacter({
   });
 
   return (
-    <group ref={group} position={[-5.8, 0, -0.7]}>
+    <group ref={group} position={PROSECUTOR_FLOOR_POSITION}>
+      {[-0.22, 0.22].map((x) => (
+        <group key={x} position={[x, 0, 0]}>
+          <mesh castShadow position={[0, 0.48, 0]}>
+            <capsuleGeometry args={[0.14, 0.72, 5, 8]} />
+            <meshStandardMaterial color="#341019" roughness={0.62} />
+          </mesh>
+          <mesh castShadow position={[0, 0.11, 0.1]}>
+            <boxGeometry args={[0.3, 0.2, 0.5]} />
+            <meshStandardMaterial color="#160b0d" roughness={0.44} />
+          </mesh>
+        </group>
+      ))}
       {/* Sleek Crimson Tailored Suit */}
       <mesh castShadow position={[0, 1.55, 0]}>
         <capsuleGeometry args={[0.5, 1.5, 6, 12]} />
@@ -959,7 +987,12 @@ function DefendantCharacter({
         gsap.to(avatar.current!.rotation, { x: 0, y: 0, z: 0, duration: 0.5 });
       } else {
         // Default: standing in the defense box
-        gsap.to(avatar.current!.position, { x: 4.8, y: 0, z: 2.2, duration: 0.5 });
+        gsap.to(avatar.current!.position, {
+          x: DEFENDANT_FLOOR_POSITION[0],
+          y: DEFENDANT_FLOOR_POSITION[1],
+          z: DEFENDANT_FLOOR_POSITION[2],
+          duration: 0.5,
+        });
         gsap.to(avatar.current!.rotation, { x: 0, y: -0.35, z: 0, duration: 0.5 });
       }
     });
@@ -989,7 +1022,19 @@ function DefendantCharacter({
   });
 
   return (
-    <group ref={avatar} position={[4.8, 0, 2.2]} rotation={[0, -0.35, 0]}>
+    <group ref={avatar} position={DEFENDANT_FLOOR_POSITION} rotation={[0, -0.35, 0]}>
+      {[-0.21, 0.21].map((x) => (
+        <group key={x} position={[x, 0, 0]}>
+          <mesh castShadow position={[0, 0.45, 0]}>
+            <capsuleGeometry args={[0.14, 0.68, 5, 8]} />
+            <meshStandardMaterial color="#bd4300" roughness={0.72} />
+          </mesh>
+          <mesh castShadow position={[0, 0.1, 0.1]}>
+            <boxGeometry args={[0.3, 0.18, 0.48]} />
+            <meshStandardMaterial color="#271610" roughness={0.6} />
+          </mesh>
+        </group>
+      ))}
       {/* Orange Inmate Jumpsuit */}
       <mesh castShadow position={[0, 1.45, 0]}>
         <capsuleGeometry args={[0.46, 1.4, 6, 12]} />
@@ -1115,9 +1160,9 @@ function GirlfriendWitness({
     const context = gsap.context(() => {
       gsap.fromTo(
         entrance.current!.position,
-        { x: 10.8, y: 0, z: -2.05 },
+        { x: 10.8, y: GIRLFRIEND_FLOOR_POSITION[1], z: GIRLFRIEND_FLOOR_POSITION[2] },
         {
-          x: 7.2,
+          x: GIRLFRIEND_FLOOR_POSITION[0],
           duration: reducedMotion ? 0 : 1.15,
           ease: 'back.out(1.15)',
         },
@@ -1170,7 +1215,7 @@ function GirlfriendWitness({
   });
 
   return (
-    <group ref={entrance} position={[7.2, 0, -2.05]} rotation={[0, -0.5, 0]}>
+    <group ref={entrance} position={GIRLFRIEND_FLOOR_POSITION} rotation={[0, -0.5, 0]}>
       <primitive object={avatar} scale={fit.scale} position={fit.offset} />
       <pointLight position={[0, 2.3, 1.4]} intensity={28} distance={7} color="#e7c5ff" />
     </group>
@@ -1197,7 +1242,19 @@ function ProceduralGirlfriendWitness({
     group.current.rotation.z = speaking ? Math.sin(clock.getElapsedTime() * 6) * 0.045 : 0;
   });
   return (
-    <group ref={group} position={[7.2, 0, -2.05]} rotation={[0, -0.5, 0]}>
+    <group ref={group} position={GIRLFRIEND_FLOOR_POSITION} rotation={[0, -0.5, 0]}>
+      {[-0.2, 0.2].map((x) => (
+        <group key={x} position={[x, 0, 0]}>
+          <mesh castShadow position={[0, 0.43, 0]}>
+            <capsuleGeometry args={[0.13, 0.62, 5, 8]} />
+            <meshStandardMaterial color="#32174b" roughness={0.55} />
+          </mesh>
+          <mesh castShadow position={[0, 0.1, 0.1]}>
+            <boxGeometry args={[0.28, 0.18, 0.44]} />
+            <meshStandardMaterial color="#130d19" roughness={0.42} />
+          </mesh>
+        </group>
+      ))}
       <mesh castShadow position={[0, 1.3, 0]}>
         <capsuleGeometry args={[0.44, 1.35, 8, 14]} />
         <meshStandardMaterial color="#5f2b92" roughness={0.5} />
@@ -1752,14 +1809,14 @@ const CAMERA_SHOTS: Record<
   { position: [number, number, number]; target: [number, number, number] }
 > = {
   // Pushed back through doors, gliding smoothly into the majestic warm courtroom
-  summons: { position: [0, 3.2, 9.8], target: [0, 2.6, -4.8] },
+  summons: { position: [0, 3.75, 14.8], target: [0, 2.15, -1.2] },
   news: { position: [0, 4.1, 1.2], target: [0, 4.1, -8.05] },
-  witness: { position: [5.45, 2.55, 0.45], target: [7.2, 1.95, -2.05] },
-  breakup: { position: [5.45, 2.55, 0.45], target: [7.2, 2.05, -2.05] },
+  witness: { position: [5.35, 2.65, 0.25], target: [7.2, 1.82, -2.62] },
+  breakup: { position: [5.35, 2.65, 0.25], target: [7.2, 1.92, -2.62] },
   evidence: { position: [4.8, 3.1, 7.2], target: [0, 1.7, 1.1] },
   defense: { position: [2.2, 2.6, 5.8], target: [2.8, 1.8, 2.4] },
   // Dramatic whip pan Dutch angle on prosecutor shouting OBJECTION!
-  objection: { position: [-3.8, 2.6, 3.2], target: [-5.8, 2.2, -0.7] },
+  objection: { position: [-2.65, 2.6, 3.5], target: [-4.8, 2.05, 0.45] },
   jury: { position: [3.8, 3.1, 5.6], target: [8.2, 1.7, 1.9] },
   bribe: { position: [0, 3.4, 1.4], target: [0, 3.45, -5.1] },
   bribeResult: { position: [0, 3.4, 0.8], target: [0, 3.45, -5.1] },
@@ -1784,13 +1841,13 @@ const CAMERA_SHOTS: Record<
   appeal: { position: [0, 3.6, -1.8], target: [0, 3.6, -5.1] },
   // Character close-ups
   judge: { position: [0.1, 3.7, 0.5], target: [0, 3.5, -5.1] },
-  prosecutor: { position: [-3.2, 2.4, 2.4], target: [-5.8, 2.2, -0.7] },
+  prosecutor: { position: [-2.6, 2.45, 3.5], target: [-4.8, 2.05, 0.45] },
   defenseSpeaker: { position: [1.2, 2.4, 4.8], target: [2.9, 1.8, 2.6] },
-  defendant: { position: [2.2, 2.55, 5.2], target: [4.8, 2.0, 2.2] },
+  defendant: { position: [2.75, 2.55, 5.75], target: [5.45, 1.95, 2.95] },
   assistant: { position: [1.2, 2.4, 4.8], target: [2.9, 1.8, 2.6] },
   clerk: { position: [0, 2.0, -1.6], target: [0, 1.4, -3.2] },
   anchor: { position: [0, 4.1, 1.2], target: [0, 4.1, -8.05] },
-  girlfriend: { position: [5.45, 2.55, 0.45], target: [7.2, 2.05, -2.05] },
+  girlfriend: { position: [5.35, 2.65, 0.25], target: [7.2, 1.92, -2.62] },
 };
 
 const SPEAKER_CAMERA_SHOTS: Readonly<Partial<Record<CourtroomSpeaker, string>>> = {

@@ -2,9 +2,17 @@
 
 > Every click has consequences. Yours are legally questionable.
 
-CLICKPOCALYPSE is an interactive comedy experience for the VibeHack '26 IIT (ISM) Dhanbad challenge “Chaos Click.” It begins as a polished SaaS landing page, escalates through 13 evidence-producing interactions, and puts the user on trial for crimes against interface stability.
+CLICKPOCALYPSE is an interactive comedy experience for the VibeHack '26 IIT (ISM) Dhanbad challenge “Chaos Click.” It begins as a suspiciously polished SaaS dashboard, escalates through 13 evidence-producing interactions, and puts the user on trial for crimes against interface stability.
 
-Step 0 provides the strict React/Vite/Tailwind foundation, deterministic Zustand state, implementation-ready product/architecture documents, and isolated ownership for three parallel agents. The complete experience is intentionally not implemented yet.
+**Live:** [avansh2006.github.io/VibeHack-26-IIT-ISM-Dhanbadh](https://avansh2006.github.io/VibeHack-26-IIT-ISM-Dhanbadh/)
+
+## Experience
+
+- One deterministic Zustand evidence trail across a 14-beat chaos journey
+- Checkbox Hydra, an evasive button, CAPTCHA From Hell, legal loading, bail bureaucracy, Password Prison, and a fake regret update
+- Full 3D React Three Fiber courtroom with speaker-directed cameras, TTS, real media reactions, a visible AI girlfriend witness, and interactive defenses
+- Sequential, cancellable audio/video direction with mute, skip, reduced-motion, replay, mobile, and WebGL fallback support
+- Downloadable SVG Digital Menace certificate and optional post-credits ending
 
 ## Run locally
 
@@ -23,6 +31,8 @@ npm run lint
 npm test
 npm run build
 npm run preview
+npm run test:courtroom-game
+npm run test:browser-download
 ```
 
 ## Project documents
@@ -36,7 +46,9 @@ npm run preview
 
 ## Deployment
 
-Cloudflare Pages needs no environment variables for the MVP.
+GitHub Pages deploys the production build through `.github/workflows/deploy-pages.yml`.
+
+Cloudflare Pages is also supported and needs no environment variables for the MVP.
 
 - Build command: `npm run build`
 - Output directory: `dist`
