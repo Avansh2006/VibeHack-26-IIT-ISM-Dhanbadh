@@ -2,7 +2,7 @@
   position: relative;
   min-height: 100dvh;
   overflow: hidden;
-  background: #030202;
+  background: #120d12;
   color: #fff6e5;
   isolation: isolate;
   font-family: ui-sans-serif, system-ui, sans-serif;
@@ -19,12 +19,18 @@
   pointer-events: none;
   background:
     radial-gradient(
-      circle at 50% 45%,
-      transparent 22%,
-      rgba(2, 1, 1, 0.32) 66%,
-      rgba(0, 0, 0, 0.92) 100%
+      circle at 50% 46%,
+      transparent 45%,
+      rgba(15, 8, 11, 0.22) 76%,
+      rgba(5, 2, 4, 0.68) 100%
     ),
-    linear-gradient(180deg, rgba(0, 0, 0, 0.46), transparent 24%, rgba(0, 0, 0, 0.48));
+    linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.36) 0%,
+      transparent 16%,
+      transparent 84%,
+      rgba(0, 0, 0, 0.52) 100%
+    );
 }
 .court-vignette::after {
   content: '';
@@ -410,6 +416,183 @@
   letter-spacing: 0.18em;
   text-transform: uppercase;
 }
+
+/* Punishment Roulette Console */
+.court-roulette-console,
+.court-mud-console,
+.court-spinner-console,
+.court-apology-console,
+.court-appeal-console {
+  width: min(880px, 100%);
+  margin-inline: auto;
+  padding: 1.4rem 1.6rem;
+  background: linear-gradient(135deg, rgba(32, 14, 18, 0.94), rgba(10, 6, 8, 0.88));
+  border: 1px solid rgba(242, 190, 66, 0.35);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(18px);
+  pointer-events: auto;
+  animation: court-rise 0.65s both cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: center;
+}
+.court-roulette-heading h2,
+.court-mud-console h2,
+.court-spinner-console h2,
+.court-apology-console h2,
+.court-appeal-console h2 {
+  margin: 0.35rem 0 0;
+  font:
+    900 clamp(2.2rem, 5.5vw, 4.4rem)/0.92 Georgia,
+    serif;
+  letter-spacing: -0.05em;
+}
+.court-roulette-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin: 1.2rem 0;
+}
+.court-roulette-card {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 1rem 0.8rem;
+  background: rgba(255, 255, 255, 0.04);
+  text-align: left;
+  border-radius: 0.5rem;
+  transition:
+    border-color 0.2s,
+    background-color 0.2s;
+}
+.court-roulette-card.selected {
+  border-color: #f2be42;
+  background: rgba(242, 190, 66, 0.12);
+}
+.court-roulette-card strong {
+  display: block;
+  font-size: 1rem;
+  color: #fff4dc;
+}
+.court-roulette-card small {
+  display: block;
+  margin-top: 0.4rem;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+.court-roulette-actions {
+  display: flex;
+  justify-content: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+/* Mud of Shame Console */
+.court-scorecard {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin: 1rem auto;
+  border: 2px dashed #f2be42;
+  border-radius: 999px;
+  padding: 0.45rem 1.6rem;
+  background: rgba(242, 190, 66, 0.1);
+}
+.court-scorecard strong {
+  font-size: 2.2rem;
+  font-weight: 900;
+  color: #f2be42;
+}
+.court-scorecard span {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Human Loading Spinner Console */
+.court-spinner-track {
+  width: 100%;
+  max-width: 520px;
+  height: 1.4rem;
+  margin: 1.2rem auto;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(0, 180, 216, 0.45);
+  overflow: hidden;
+  position: relative;
+}
+.court-spinner-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #0077b6, #00b4d8, #90e0ef);
+  transition: width 0.12s ease-out;
+}
+.court-spinner-dial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 5.5rem;
+  height: 5.5rem;
+  margin: 0.8rem auto;
+  border-radius: 50%;
+  border: 3px dashed #00b4d8;
+  background: rgba(0, 180, 216, 0.12);
+  color: #90e0ef;
+  font-size: 0.85rem;
+  font-weight: 900;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.court-spinner-dial:active {
+  cursor: grabbing;
+  transform: scale(0.95);
+}
+
+/* Court-Ordered Apology Console */
+.court-apology-options {
+  display: grid;
+  gap: 0.65rem;
+  margin: 1.2rem 0;
+  text-align: left;
+}
+.court-apology-button {
+  padding: 0.9rem 1.1rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff4de;
+  border-radius: 0.6rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  transition:
+    border-color 0.2s,
+    background-color 0.2s;
+}
+.court-apology-button:hover,
+.court-apology-button.selected {
+  border-color: #f2be42;
+  background: rgba(242, 190, 66, 0.14);
+}
+
+/* Appeal Denied Twist Console */
+.court-appeal-console {
+  border-color: #e63946;
+  background: linear-gradient(135deg, rgba(80, 12, 20, 0.95), rgba(20, 4, 8, 0.92));
+}
+.court-appeal-console h2 {
+  color: #ff4d6d;
+  font-size: clamp(2.8rem, 8vw, 6rem);
+  text-shadow: 0 8px 30px rgba(255, 77, 109, 0.6);
+}
+.court-appeal-proclamation {
+  margin: 1rem auto;
+  max-width: 620px;
+  font-family: Georgia, serif;
+  font-style: italic;
+  font-size: clamp(1.1rem, 2.5vw, 1.45rem);
+  line-height: 1.4;
+  color: #ffe5ec;
+}
+
 .court-certificate-layer {
   min-height: 100dvh;
   overflow-y: auto;

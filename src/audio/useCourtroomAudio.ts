@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-export type CourtroomSoundCue = 'gavel' | 'objection' | 'verdict';
+export type CourtroomSoundCue =
+  'gavel' | 'objection' | 'verdict' | 'spin' | 'splash' | 'buzzer' | 'cheer';
 
 export interface CourtroomAudioController {
   muted: boolean;
@@ -12,9 +13,13 @@ export interface CourtroomAudioController {
 }
 
 const CUE_FREQUENCIES: Readonly<Record<CourtroomSoundCue, readonly number[]>> = {
-  gavel: [92, 64],
-  objection: [330, 440],
-  verdict: [261.63, 329.63, 392],
+  gavel: [110, 55],
+  objection: [330, 440, 554],
+  verdict: [220, 165, 110],
+  spin: [400, 520, 640],
+  splash: [180, 95, 45],
+  buzzer: [90, 85],
+  cheer: [392, 493.88, 587.33, 783.99],
 };
 
 export function useCourtroomAudio(): CourtroomAudioController {
@@ -84,14 +89,40 @@ export function useCourtroomAudio(): CourtroomAudioController {
         CUE_FREQUENCIES[cue].forEach((frequency, index) => {
           const oscillator = context.createOscillator();
           const gain = context.createGain();
-          const start = now + index * (cue === 'verdict' ? 0.08 : 0.035);
-          const duration = cue === 'gavel' ? 0.16 : 0.24;
+          const isCheer = cue === 'cheer';
+          const isBuzzer = cue === 'buzzer';
+          const isSpin = cue === 'spin';
+          const isSplash = cue === 'splash';
 
-          oscillator.type = cue === 'gavel' ? 'square' : 'sine';
+          const start =
+            now + index * (isCheer ? 0.09 : isSpin ? 0.05 : cue === 'verdict' ? 0.08 : 0.035);
+          const duration = isBuzzer
+            ? 0.48
+            : isCheer
+              ? 0.32
+              : isSplash
+                ? 0.28
+                : isSpin
+                  ? 0.04
+                  : cue === 'gavel'
+                    ? 0.16
+                    : 0.24;
+
+          oscillator.type = isBuzzer
+            ? 'sawtooth'
+            : cue === 'gavel'
+              ? 'square'
+              : isCheer
+                ? 'triangle'
+                : 'sine';
           oscillator.frequency.setValueAtTime(frequency, start);
-          if (cue === 'gavel')
-            oscillator.frequency.exponentialRampToValueAtTime(42, start + duration);
-          gain.gain.setValueAtTime(cue === 'gavel' ? 0.12 : 0.055, start);
+          if (cue === 'gavel') {
+            oscillator.frequency.exponentialRampToValueAtTime(38, start + duration);
+          } else if (isSplash) {
+            oscillator.frequency.exponentialRampToValueAtTime(25, start + duration);
+          }
+          const peakGain = isBuzzer ? 0.15 : cue === 'gavel' ? 0.14 : isSpin ? 0.08 : 0.06;
+          gain.gain.setValueAtTime(peakGain, start);
           gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
           oscillator.connect(gain);
           gain.connect(context.destination);

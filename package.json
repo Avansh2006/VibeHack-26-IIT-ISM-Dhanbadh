@@ -13,7 +13,8 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:browser-download": "node scripts/verify-browser-download.mjs"
+    "test:browser-download": "node scripts/verify-browser-download.mjs",
+    "test:courtroom-game": "node scripts/verify-courtroom-game.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.9",

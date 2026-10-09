@@ -5,6 +5,7 @@ export interface CertificateDetails {
   issuedAt: number;
   clickCount: number;
   verdict: Verdict;
+  punishment?: string | undefined;
 }
 
 function escapeXml(value: string): string {
@@ -76,6 +77,11 @@ export function createCertificateSvg(details: CertificateDetails): string {
         `<text x="800" y="${720 + index * 38}" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#d6d3d1">${escapeXml(line)}</text>`,
     )
     .join('\n  ')}
+  ${
+    details.punishment
+      ? `<text x="800" y="860" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="700" letter-spacing="2" fill="#fde68a">SERVED PUNISHMENT: ${escapeXml(details.punishment).toUpperCase()}</text>`
+      : ''
+  }
   <text x="230" y="935" font-family="Arial, sans-serif" font-size="20" fill="#a8a29e">EVIDENCE COUNT</text>
   <text x="230" y="980" font-family="Arial, sans-serif" font-size="38" font-weight="700" fill="#fde68a">${details.clickCount}</text>
   <text x="800" y="935" text-anchor="middle" font-family="Arial, sans-serif" font-size="20" fill="#a8a29e">ISSUED</text>

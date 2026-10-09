@@ -118,7 +118,9 @@ try {
       captureBeyondViewport: false,
     });
     await writeFile(screenshotPath, Buffer.from(screenshot.data, 'base64'));
-    process.stdout.write(`${JSON.stringify({ browser: path.basename(browserPath), screenshotPath })}\n`);
+    process.stdout.write(
+      `${JSON.stringify({ browser: path.basename(browserPath), screenshotPath })}\n`,
+    );
     socket.close();
     browser.kill();
     await rm(temporaryRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 150 });
