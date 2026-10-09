@@ -9,11 +9,23 @@ interface ProveInnocenceProps {
   onStatement(this: void, type: InteractionType, label: string): void;
 }
 
-const DEFENSES = [
-  'The button looked emotionally available.',
-  'My mouse slipped with remarkable consistency.',
-  'I invoke dark-pattern immunity.',
-] as const;
+const DEFENSE_SETS: Readonly<Record<number, readonly string[]>> = {
+  7: [
+    'The button looked emotionally available.',
+    'My mouse slipped with remarkable consistency.',
+    'I invoke dark-pattern immunity.',
+  ],
+  8: [
+    'Objection! The button was asking for it.',
+    'I require a lawyer who understands CSS.',
+    'Redirect the question to localhost.',
+  ],
+  9: [
+    'That is not my click history. Mine has better kerning.',
+    'Weather is not admissible evidence.',
+    'Change the venue to Firefox.',
+  ],
+};
 
 export function ProveInnocence({
   beat,
@@ -23,6 +35,7 @@ export function ProveInnocence({
 }: ProveInnocenceProps) {
   const recentEvidence = evidenceLog.slice(-3).reverse();
   const isMeltdown = beat.stage === 'meltdown';
+  const defenses = DEFENSE_SETS[clickCount] ?? DEFENSE_SETS[7] ?? [];
 
   return (
     <aside
@@ -66,7 +79,7 @@ export function ProveInnocence({
               {beat.actionLabel}
             </button>
           ) : (
-            DEFENSES.map((defense, index) => (
+            defenses.map((defense, index) => (
               <button
                 key={defense}
                 type="button"

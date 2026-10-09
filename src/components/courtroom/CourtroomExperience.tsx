@@ -59,6 +59,10 @@ export function CourtroomExperience({
   const verdict = selectedDefense ? getVerdict(selectedDefense, summary) : null;
 
   useLayoutEffect(() => {
+    window.scrollTo(0, 0);
+  }, [phase]);
+
+  useLayoutEffect(() => {
     const root = rootRef.current;
     if (!root) return;
 
@@ -193,16 +197,16 @@ export function CourtroomExperience({
         </button>
       </header>
 
-      <main className="relative z-20 mx-auto w-full max-w-7xl px-4 pb-16 sm:px-8">
+      <main className="relative z-20 mx-auto flex w-full max-w-7xl flex-col px-4 pb-16 sm:px-8">
         {phase !== 'certificate' && (
-          <div className="grid gap-5 lg:grid-cols-[0.72fr_1.6fr_0.78fr] lg:items-end">
+          <div className="order-2 mt-7 grid gap-5 lg:order-1 lg:mt-0 lg:grid-cols-[0.72fr_1.6fr_0.78fr] lg:items-end">
             <Prosecutor phase={phase} evidenceCount={summary.totalClicks} />
             <Judge phase={phase} />
             <CourtClerk exhibitCount={exhibits.length} />
           </div>
         )}
 
-        <section data-scene className="relative mt-7">
+        <section data-scene className="relative order-1 mt-2 lg:order-2 lg:mt-7">
           {phase === 'summons' && (
             <SummonsScene
               evidenceCount={summary.totalClicks}

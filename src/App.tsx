@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useLayoutEffect } from 'react';
 import {
   ArrowUpRight,
   Fingerprint,
@@ -31,6 +31,10 @@ function App() {
   const beat = getChaosBeat(clickCount);
   const progress = getChaosProgress(clickCount);
   const landingActionEnabled = clickCount < 4;
+
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0);
+  }, [sessionId]);
 
   const handleEffectAction = useCallback(
     (type: InteractionType, label: string) => {

@@ -41,3 +41,11 @@ Cloudflare Pages needs no environment variables for the MVP.
 - Build command: `npm run build`
 - Output directory: `dist`
 - Install command: `npm install` (or `npm ci` after committing the lockfile)
+
+The checked-in `wrangler.jsonc` also declares `dist` as the Pages output directory. With an
+authenticated Wrangler installation, deploy a preview with:
+
+```powershell
+npm run build
+npx wrangler pages deploy dist --project-name clickpocalypse --branch avansh
+```

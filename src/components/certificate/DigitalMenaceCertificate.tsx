@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useMemo } from 'react';
 import { Download, Printer, RotateCcw, Scale } from 'lucide-react';
 import type { Verdict } from '@/components/courtroom/trialLogic';
-import { downloadCertificate } from '@/components/certificate/certificateSvg';
+import { createCertificateDataUri } from '@/components/certificate/certificateSvg';
 
 export interface DigitalMenaceCertificateProps {
   certificateId: string;
@@ -18,21 +18,15 @@ export function DigitalMenaceCertificate({
   verdict,
   onReplay,
 }: DigitalMenaceCertificateProps) {
-  const [downloadFailed, setDownloadFailed] = useState(false);
   const issuedDate = new Date(issuedAt).toLocaleDateString('en-GB', {
     day: '2-digit',
     month: 'long',
     year: 'numeric',
   });
-
-  const handleDownload = () => {
-    try {
-      downloadCertificate({ certificateId, issuedAt, clickCount, verdict });
-      setDownloadFailed(false);
-    } catch {
-      setDownloadFailed(true);
-    }
-  };
+  const certificateHref = useMemo(
+    () => createCertificateDataUri({ certificateId, issuedAt, clickCount, verdict }),
+    [certificateId, clickCount, issuedAt, verdict],
+  );
 
   return (
     <div className="mx-auto w-full max-w-5xl">
@@ -63,14 +57,14 @@ export function DigitalMenaceCertificate({
       </div>
 
       <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-        <button
-          type="button"
-          onClick={handleDownload}
+        <a
+          href={certificateHref}
+          download={`certified-digital-menace-${certificateId}.svg`}
           className="inline-flex min-h-11 items-center gap-2 rounded-full bg-amber-200 px-5 py-3 text-sm font-black text-amber-950 focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-amber-200"
         >
           <Download aria-hidden="true" size={18} />
           Download certificate
-        </button>
+        </a>
         <button
           type="button"
           onClick={() => window.print()}
@@ -88,11 +82,6 @@ export function DigitalMenaceCertificate({
           Commit another offense
         </button>
       </div>
-      {downloadFailed && (
-        <p role="alert" className="mt-4 text-center text-sm font-bold text-amber-200">
-          The download clerk fainted. The visible certificate remains printable.
-        </p>
-      )}
     </div>
   );
 }

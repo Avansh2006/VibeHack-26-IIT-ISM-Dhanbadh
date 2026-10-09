@@ -85,14 +85,15 @@ export function createCertificateSvg(details: CertificateDetails): string {
 </svg>`;
 }
 
+export function createCertificateDataUri(details: CertificateDetails): string {
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(createCertificateSvg(details))}`;
+}
+
 export function downloadCertificate(details: CertificateDetails): void {
-  const blob = new Blob([createCertificateSvg(details)], { type: 'image/svg+xml;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
-  anchor.href = url;
+  anchor.href = createCertificateDataUri(details);
   anchor.download = `certified-digital-menace-${details.certificateId}.svg`;
   document.body.append(anchor);
   anchor.click();
   anchor.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
