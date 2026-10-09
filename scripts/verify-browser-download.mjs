@@ -8,6 +8,7 @@ import path from 'node:path';
 
 const previewUrl = process.env.CLICKPOCALYPSE_PREVIEW_URL ?? 'http://127.0.0.1:4173';
 const reducedMotion = process.env.CLICKPOCALYPSE_REDUCED_MOTION === '1';
+const mobileViewport = process.env.CLICKPOCALYPSE_MOBILE === '1';
 const browserCandidates = [
   process.env.CHROME_PATH,
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
@@ -30,6 +31,7 @@ const browserArguments = [
   '--remote-allow-origins=*',
   `--remote-debugging-port=${port}`,
   `--user-data-dir=${profileDirectory}`,
+  ...(mobileViewport ? ['--window-size=390,844'] : []),
   ...(reducedMotion ? ['--force-prefers-reduced-motion'] : []),
   previewUrl,
 ];
@@ -164,6 +166,7 @@ try {
     `${JSON.stringify({
       browser: path.basename(browserPath),
       downloaded: true,
+      mobileViewport,
       reducedMotion: journeyState.reducedMotion,
       replayed,
       filename: path.basename(downloadedFile),
