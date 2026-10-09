@@ -12,7 +12,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:browser-download": "node scripts/verify-browser-download.mjs"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
