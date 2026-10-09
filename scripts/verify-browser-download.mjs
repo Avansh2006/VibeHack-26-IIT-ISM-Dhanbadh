@@ -9,6 +9,7 @@ import path from 'node:path';
 const previewUrl = process.env.CLICKPOCALYPSE_PREVIEW_URL ?? 'http://127.0.0.1:4173';
 const reducedMotion = process.env.CLICKPOCALYPSE_REDUCED_MOTION === '1';
 const mobileViewport = process.env.CLICKPOCALYPSE_MOBILE === '1';
+const disableWebGl = process.env.CLICKPOCALYPSE_DISABLE_WEBGL === '1';
 const screenshotPath = process.env.CLICKPOCALYPSE_SCREENSHOT_PATH;
 const browserCandidates = [
   process.env.CHROME_PATH,
@@ -28,12 +29,14 @@ const browserArguments = [
   '--disable-gpu',
   '--no-first-run',
   '--disable-default-apps',
+  '--autoplay-policy=no-user-gesture-required',
   '--disable-popup-blocking',
   '--remote-allow-origins=*',
   `--remote-debugging-port=${port}`,
   `--user-data-dir=${profileDirectory}`,
   `--window-size=${mobileViewport ? '390,844' : '1440,900'}`,
   ...(reducedMotion ? ['--force-prefers-reduced-motion'] : []),
+  ...(disableWebGl ? ['--disable-webgl', '--disable-software-rasterizer'] : []),
   previewUrl,
 ];
 const browser = spawn(browserPath, browserArguments, { stdio: 'ignore', windowsHide: true });
@@ -65,7 +68,7 @@ try {
       (async () => {
         const pause = (duration = 90) => new Promise((resolve) => setTimeout(resolve, duration));
         const click = async (label, selector = 'button') => {
-          const deadline = Date.now() + 5000;
+          const deadline = Date.now() + 15000;
           while (Date.now() < deadline) {
             const candidate = [...document.querySelectorAll(selector)].find((element) =>
               element.textContent?.replace(/\\s+/g, ' ').trim().includes(label),
@@ -94,7 +97,9 @@ try {
         await click('Decline pixel demands');
         await click('PROVE MY INNOCENCE');
         await pause(${screenshotPath ? '3000' : '1400'});
+        const fallbackVisible = document.body.innerText.includes('WebGL recused itself');
         if (${Boolean(screenshotPath)}) return { courtroomReady: true };
+        if (${reducedMotion}) await click('Mute court');
         await click('Face the extremely online judge');
         await click('Attempt a legally questionable defense');
         await click('I was framed by JavaScript');
@@ -106,6 +111,8 @@ try {
           certificateHref: certificateLink?.href,
           certificateFilename: certificateLink?.download,
           reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+          fallbackVisible,
+          muted: document.body.innerText.includes('Unmute court'),
         };
       })()
     `,
@@ -131,6 +138,12 @@ try {
   }
   if (reducedMotion && !journeyState.reducedMotion) {
     throw new Error('Chrome did not activate the requested reduced-motion media preference.');
+  }
+  if (disableWebGl && !journeyState.fallbackVisible) {
+    throw new Error('The WebGL-disabled journey did not render the playable fallback.');
+  }
+  if (reducedMotion && !journeyState.muted) {
+    throw new Error('The muted journey did not preserve the mute state.');
   }
   if (
     !journeyState.certificateHref?.startsWith('data:image/svg+xml') ||
@@ -183,6 +196,7 @@ try {
       browser: path.basename(browserPath),
       downloaded: true,
       mobileViewport,
+      webGlFallback: journeyState.fallbackVisible,
       reducedMotion: journeyState.reducedMotion,
       replayed,
       filename: path.basename(downloadedFile),

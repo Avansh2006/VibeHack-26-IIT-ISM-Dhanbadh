@@ -23,6 +23,7 @@ const browserArguments = [
   '--disable-gpu',
   '--no-first-run',
   '--disable-default-apps',
+  '--autoplay-policy=no-user-gesture-required',
   '--remote-allow-origins=*',
   `--remote-debugging-port=${port}`,
   `--user-data-dir=${profileDirectory}`,
@@ -69,7 +70,7 @@ try {
     (async () => {
       const pause = (d = 90) => new Promise((r) => setTimeout(r, d));
       const click = async (label) => {
-        const deadline = Date.now() + 6000;
+        const deadline = Date.now() + 15000;
         while (Date.now() < deadline) {
           const el = [...document.querySelectorAll('button')].find(b => b.textContent?.includes(label));
           if (el) { el.click(); await pause(150); return; }

@@ -25,6 +25,7 @@ const browserArguments = [
   '--disable-gpu',
   '--no-first-run',
   '--disable-default-apps',
+  '--autoplay-policy=no-user-gesture-required',
   '--remote-allow-origins=*',
   `--remote-debugging-port=${port}`,
   `--user-data-dir=${profileDirectory}`,
@@ -56,7 +57,7 @@ try {
       (async () => {
         const pause = (duration = 100) => new Promise((resolve) => setTimeout(resolve, duration));
         const click = async (label, selector = 'button') => {
-          const deadline = Date.now() + 6000;
+          const deadline = Date.now() + 15000;
           while (Date.now() < deadline) {
             const candidate = [...document.querySelectorAll(selector)].find((element) =>
               element.textContent?.replace(/\\s+/g, ' ').trim().includes(label),
@@ -89,6 +90,18 @@ try {
 
         // Courtroom stages
         await click('Face the extremely online judge');
+        const openingSteps = [];
+        const openingDeadline = Date.now() + 15000;
+        while (Date.now() < openingDeadline) {
+          const root = document.querySelector('[data-opening-step]');
+          const step = root?.getAttribute('data-opening-step');
+          if (step && openingSteps.at(-1) !== step) openingSteps.push(step);
+          if (step === 'complete') break;
+          await pause(40);
+        }
+        const openingRoot = document.querySelector('[data-opening-step]');
+        const openingAudioResult = openingRoot?.getAttribute('data-opening-audio-result');
+        const ttsSupported = openingRoot?.getAttribute('data-tts-supported') === 'true';
         await click('Attempt a legally questionable defense');
         await click('I was framed by JavaScript');
         await pause(2500); // Wait for objection -> verdict
@@ -121,6 +134,9 @@ try {
           appealPassed,
           certificatePassed,
           hasPunishmentOnCertificate: document.body.innerText.toLowerCase().includes('served punishment'),
+          openingSteps,
+          openingAudioResult,
+          ttsSupported,
         };
       })()
     `,
@@ -133,7 +149,12 @@ try {
     !state?.mudPassed ||
     !state?.appealPassed ||
     !state?.certificatePassed ||
-    !state?.hasPunishmentOnCertificate
+    !state?.hasPunishmentOnCertificate ||
+    !['defendant', 'prosecutor', 'judge', 'complete'].every((step) =>
+      state?.openingSteps?.includes(step),
+    ) ||
+    state?.openingAudioResult !== 'ended' ||
+    !state?.ttsSupported
   ) {
     throw new Error('Courtroom interactive comedy game verification failed.');
   }

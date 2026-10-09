@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-export type CourtroomSpeaker = 'judge' | 'prosecutor' | 'defense' | 'clerk' | 'assistant';
+export type CourtroomSpeaker =
+  'judge' | 'prosecutor' | 'defendant' | 'defense' | 'clerk' | 'assistant';
 
 export interface SpokenLine {
   speaker: CourtroomSpeaker;
@@ -17,6 +18,7 @@ export interface CourtroomVoiceController {
 const VOICE_HINTS: Readonly<Record<CourtroomSpeaker, readonly string[]>> = {
   judge: ['david', 'mark', 'george', 'guy', 'male'],
   prosecutor: ['zira', 'samantha', 'susan', 'female'],
+  defendant: ['aria', 'jenny', 'samantha', 'female'],
   defense: ['aria', 'jenny', 'microsoft', 'male', 'female'],
   clerk: ['alex', 'fred', 'daniel', 'male'],
   assistant: ['aria', 'jenny', 'google uk english female', 'female'],
@@ -25,6 +27,7 @@ const VOICE_HINTS: Readonly<Record<CourtroomSpeaker, readonly string[]>> = {
 const VOICE_SETTINGS: Readonly<Record<CourtroomSpeaker, { pitch: number; rate: number }>> = {
   judge: { pitch: 0.62, rate: 0.85 },
   prosecutor: { pitch: 1.16, rate: 1.12 },
+  defendant: { pitch: 1.22, rate: 0.92 },
   defense: { pitch: 1.32, rate: 1.06 },
   clerk: { pitch: 0.78, rate: 0.88 },
   assistant: { pitch: 1.32, rate: 1.06 },

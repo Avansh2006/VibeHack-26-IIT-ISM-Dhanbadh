@@ -79,6 +79,7 @@ export default function CourtroomScene3D(props: CourtroomScene3DProps) {
         shadow-mapSize={[2048, 2048]}
         shadow-bias={-0.0001}
       />
+      <pointLight position={[0, 4.6, 3.2]} intensity={26} color="#ffe1b3" distance={18} />
 
       {/* 3. Spotlights on Judge, Prosecution & Defense Podiums */}
       <spotLight
@@ -564,6 +565,11 @@ function JudgeCharacter({
         selectedDefense === 'mouse' ? -0.22 : selectedDefense === 'javascript' ? 0.22 : 0;
       head.current.position.y = 2.75 + Math.sin(time * 2.5) * 0.028;
     }
+    if (wig.current) {
+      wig.current.rotation.z =
+        phase === 'appeal' ? Math.sin(time * 16) * 0.09 : Math.sin(time * 1.2) * 0.008;
+      wig.current.position.y = phase === 'appeal' ? Math.abs(Math.sin(time * 12)) * 0.06 : 0;
+    }
     if (arm.current) {
       const pounding = phase === 'appeal' || phase === 'objection';
       arm.current.rotation.x = pounding
@@ -801,6 +807,7 @@ function ClerkCharacter({ speaker }: { speaker: CourtroomSpeaker | null }) {
 
 function DefendantCharacter({
   phase,
+  speaker,
   reducedMotion,
 }: {
   phase: TrialPhase;
@@ -810,6 +817,8 @@ function DefendantCharacter({
 }) {
   const avatar = useRef<Group>(null);
   const head = useRef<Group>(null);
+  const leftArm = useRef<Group>(null);
+  const rightArm = useRef<Group>(null);
 
   // Animate mud acrobatic front roll
   useLayoutEffect(() => {
@@ -873,6 +882,11 @@ function DefendantCharacter({
   useFrame(({ clock }) => {
     if (reducedMotion || !avatar.current) return;
     const time = clock.getElapsedTime();
+    const protesting = speaker === 'defendant';
+    if (leftArm.current && rightArm.current) {
+      leftArm.current.rotation.z = protesting ? 1.4 + Math.sin(time * 10) * 0.16 : 0.32;
+      rightArm.current.rotation.z = protesting ? -1.4 - Math.sin(time * 10) * 0.16 : -0.32;
+    }
     if (phase === 'spinner') {
       // Spinning dizzy rotation
       avatar.current.rotation.y = time * 3.5;
@@ -899,6 +913,18 @@ function DefendantCharacter({
         <boxGeometry args={[0.22, 0.32, 0.04]} />
         <meshStandardMaterial color="#ffffff" roughness={0.2} />
       </mesh>
+      <group ref={leftArm} position={[-0.48, 1.75, 0]} rotation={[0, 0, 0.32]}>
+        <mesh castShadow position={[0, -0.48, 0]}>
+          <capsuleGeometry args={[0.13, 0.72, 6, 10]} />
+          <meshStandardMaterial color="#e85d04" roughness={0.65} />
+        </mesh>
+      </group>
+      <group ref={rightArm} position={[0.48, 1.75, 0]} rotation={[0, 0, -0.32]}>
+        <mesh castShadow position={[0, -0.48, 0]}>
+          <capsuleGeometry args={[0.13, 0.72, 6, 10]} />
+          <meshStandardMaterial color="#e85d04" roughness={0.65} />
+        </mesh>
+      </group>
       {/* Head */}
       <group ref={head} position={[0, 2.7, 0]}>
         <mesh castShadow>
@@ -1323,6 +1349,7 @@ const CAMERA_SHOTS: Record<
   judge: { position: [0.1, 3.7, 0.5], target: [0, 3.5, -5.1] },
   prosecutor: { position: [-3.2, 2.4, 2.4], target: [-5.8, 2.2, -0.7] },
   defenseSpeaker: { position: [1.2, 2.4, 4.8], target: [2.9, 1.8, 2.6] },
+  defendant: { position: [2.2, 2.55, 5.2], target: [4.8, 2.0, 2.2] },
   assistant: { position: [1.2, 2.4, 4.8], target: [2.9, 1.8, 2.6] },
   clerk: { position: [0, 2.0, -1.6], target: [0, 1.4, -3.2] },
 };

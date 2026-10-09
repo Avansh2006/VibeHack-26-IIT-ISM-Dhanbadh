@@ -45,6 +45,7 @@ const PHASE_LABELS: Readonly<Record<TrialPhase, string>> = {
 const SPEAKER_LABELS: Readonly<Record<CourtroomSpeaker, string>> = {
   judge: 'Hon. Justice Null Pointer',
   prosecutor: 'Ms. Terms & Conditions',
+  defendant: 'The Defendant (unprompted)',
   defense: 'Counsel Error 404',
   clerk: 'Bailiff Bitflip',
   assistant: 'Counsel Error 404',
@@ -56,19 +57,19 @@ const PUNISHMENTS: Readonly<
   mud: {
     title: 'Mud of Shame',
     subtitle: 'Acrobatic public humiliation',
-    description: 'A stylized 3D front roll into a cartoon mud puddle for maximum embarrassment.',
+    description: 'One heroic front roll into mud that has already retained counsel.',
     angle: 0,
   },
   spinner: {
     title: 'Human Loading Spinner',
     subtitle: '404 hours of manual buffering',
-    description: 'Sentence the defendant to spin a ridiculous buffering wheel by hand.',
+    description: 'Buffer manually until your dignity reaches one hundred percent. It will not.',
     angle: (Math.PI * 2) / 3,
   },
   apology: {
     title: 'Court-Ordered Apology',
     subtitle: 'Recite unhinged confessions',
-    description: 'Confess to pixel brutality before an unsympathetic court.',
+    description: 'Apologize to every bruised pixel while the scrollbar refuses eye contact.',
     angle: (Math.PI * 4) / 3,
   },
 };
@@ -117,6 +118,13 @@ export function CourtroomExperience({
   const [selectedDefense, setSelectedDefense] = useState<DefenseId | null>(null);
   const [activeLine, setActiveLine] = useState<SpokenLine | null>(null);
   const [gavelPulse, setGavelPulse] = useState(0);
+  const [openingStep, setOpeningStep] = useState<
+    'ready' | 'defendant' | 'prosecutor' | 'judge' | 'complete'
+  >('ready');
+  const [openingAudioResult, setOpeningAudioResult] = useState<'pending' | 'ended' | 'failed'>(
+    'pending',
+  );
+  const [appealReveal, setAppealReveal] = useState(false);
 
   // Punishment roulette & mini-game state
   const [selectedPunishment, setSelectedPunishment] = useState<PunishmentType>('mud');
@@ -136,6 +144,8 @@ export function CourtroomExperience({
   const { skip: skipVoice, speak } = voices;
   const speakRef = useRef(speak);
   const dialogueGeneration = useRef(0);
+  const openingGeneration = useRef(0);
+  const mardAudioRef = useRef<HTMLAudioElement | null>(null);
   const summary = useMemo(() => summarizeEvidence(evidenceLog), [evidenceLog]);
   const exhibits = useMemo(() => selectCourtroomExhibits(evidenceLog), [evidenceLog]);
   const verdict = selectedDefense ? getVerdict(selectedDefense, summary) : null;
@@ -150,6 +160,24 @@ export function CourtroomExperience({
     return stopAudio;
   }, [startAmbience, stopAudio]);
 
+  useEffect(() => {
+    const asset = new Audio(`${import.meta.env.BASE_URL}audio/mard.mpeg`);
+    asset.preload = 'auto';
+    asset.muted = false;
+    mardAudioRef.current = asset;
+    return () => {
+      openingGeneration.current += 1;
+      asset.pause();
+      asset.removeAttribute('src');
+      asset.load();
+      mardAudioRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (mardAudioRef.current) mardAudioRef.current.muted = muted;
+  }, [muted]);
+
   const strikeGavel = useCallback(() => {
     setGavelPulse((value) => value + 1);
     playCue('gavel');
@@ -157,13 +185,14 @@ export function CourtroomExperience({
 
   // Dialogue director
   useEffect(() => {
+    if (phase === 'summons') return;
     const generation = dialogueGeneration.current + 1;
     dialogueGeneration.current = generation;
-    const lines = dialogueForPhase(phase, summary.totalClicks, verdict?.title);
+    const lines = dialogueForPhase(phase, verdict?.title);
 
     const perform = async () => {
-      if (phase === 'summons' && !reducedMotion) {
-        await new Promise((resolve) => window.setTimeout(resolve, 1500));
+      if (phase === 'appeal' && !reducedMotion) {
+        await new Promise((resolve) => window.setTimeout(resolve, 850));
       }
       for (const line of lines) {
         if (dialogueGeneration.current !== generation) return;
@@ -203,16 +232,23 @@ export function CourtroomExperience({
   // Appeal twist cinematic auto transition to certificate
   useEffect(() => {
     if (phase !== 'appeal') return;
-    playCue('buzzer');
-    const fanfareTimer = window.setTimeout(() => playCue('cheer'), 400);
+    const revealTimer = window.setTimeout(
+      () => {
+        setAppealReveal(true);
+        playCue('buzzer');
+      },
+      reducedMotion ? 120 : 780,
+    );
+    const fanfareTimer = window.setTimeout(() => playCue('cheer'), reducedMotion ? 260 : 1350);
 
     const completeTimer = window.setTimeout(
       () => {
         setPhase('certificate');
       },
-      reducedMotion ? 800 : 4200,
+      reducedMotion ? 1100 : 5200,
     );
     return () => {
+      window.clearTimeout(revealTimer);
       window.clearTimeout(fanfareTimer);
       window.clearTimeout(completeTimer);
     };
@@ -222,6 +258,82 @@ export function CourtroomExperience({
     dialogueGeneration.current += 1;
     skipVoice();
     setActiveLine(null);
+  };
+
+  const startOpeningDialogue = async () => {
+    if (openingStep !== 'ready') return;
+    const generation = openingGeneration.current + 1;
+    openingGeneration.current = generation;
+    dialogueGeneration.current += 1;
+    skipVoice();
+    startAmbience();
+
+    const primedAsset = mardAudioRef.current;
+    if (primedAsset) {
+      primedAsset.muted = true;
+      try {
+        await primedAsset.play();
+        primedAsset.pause();
+        primedAsset.currentTime = 0;
+      } catch {
+        // Some browsers do not need priming; the real playback path still handles failure.
+      }
+      primedAsset.muted = muted;
+    }
+
+    const speakOpening = async (line: SpokenLine, minimumDuration: number) => {
+      setActiveLine(line);
+      await Promise.all([
+        Promise.race([
+          speakRef.current(line),
+          new Promise((resolve) => window.setTimeout(resolve, 5200)),
+        ]),
+        new Promise((resolve) => window.setTimeout(resolve, minimumDuration)),
+      ]);
+    };
+
+    setOpeningStep('defendant');
+    await speakOpening({ speaker: 'defendant', text: 'I AM INNOCENT!' }, reducedMotion ? 450 : 900);
+    if (openingGeneration.current !== generation) return;
+
+    skipVoice();
+    setOpeningStep('prosecutor');
+    setActiveLine({ speaker: 'prosecutor', text: 'Ek kachori do samosa.' });
+    const asset = mardAudioRef.current;
+    let assetEnded = false;
+    if (asset) {
+      asset.currentTime = 0;
+      asset.muted = false;
+      assetEnded = await new Promise<boolean>((resolve) => {
+        const finish = (ended: boolean) => {
+          asset.removeEventListener('ended', handleEnded);
+          asset.removeEventListener('error', handleError);
+          resolve(ended);
+        };
+        const handleEnded = () => finish(true);
+        const handleError = () => finish(false);
+        asset.addEventListener('ended', handleEnded, { once: true });
+        asset.addEventListener('error', handleError, { once: true });
+        void asset.play().catch(() => finish(false));
+      });
+    }
+    setOpeningAudioResult(assetEnded ? 'ended' : 'failed');
+    if (!assetEnded) {
+      await new Promise((resolve) => window.setTimeout(resolve, reducedMotion ? 350 : 1100));
+    }
+    if (openingGeneration.current !== generation) return;
+
+    setOpeningStep('judge');
+    await speakOpening(
+      { speaker: 'judge', text: "ORDER! ORDER! Let's continue with the court." },
+      reducedMotion ? 550 : 1100,
+    );
+    if (openingGeneration.current !== generation) return;
+
+    setOpeningStep('complete');
+    setActiveLine(null);
+    strikeGavel();
+    setPhase('evidence');
   };
 
   const chooseDefense = (defense: DefenseId) => {
@@ -278,12 +390,18 @@ export function CourtroomExperience({
 
   // Trigger Appeal Climax
   const triggerAppeal = () => {
+    setAppealReveal(false);
     strikeGavel();
     setPhase('appeal');
   };
 
   return (
-    <div className={`court-experience court-phase-${phase}`}>
+    <div
+      className={`court-experience court-phase-${phase}`}
+      data-opening-step={openingStep}
+      data-opening-audio-result={openingAudioResult}
+      data-tts-supported={voices.supported}
+    >
       <div className="court-canvas" aria-hidden="true">
         {webGlSupported ? (
           <Suspense fallback={<CourtroomFallback loading />}>
@@ -332,7 +450,7 @@ export function CourtroomExperience({
             type="button"
             className="court-control"
             onClick={skipDialogue}
-            disabled={!activeLine}
+            disabled={!activeLine || (phase === 'summons' && openingStep !== 'ready')}
           >
             <FastForward aria-hidden="true" size={16} />
             <span>Skip line</span>
@@ -342,6 +460,7 @@ export function CourtroomExperience({
             className="court-control"
             onClick={() => {
               skipVoice();
+              if (mardAudioRef.current) mardAudioRef.current.muted = !muted;
               toggleMute();
             }}
             aria-pressed={muted}
@@ -371,12 +490,13 @@ export function CourtroomExperience({
               <button
                 type="button"
                 className="court-primary"
-                onClick={() => {
-                  strikeGavel();
-                  setPhase('evidence');
-                }}
+                onClick={() => void startOpeningDialogue()}
+                disabled={openingStep !== 'ready'}
               >
-                Face the extremely online judge <ArrowRight aria-hidden="true" size={18} />
+                {openingStep === 'ready'
+                  ? 'Face the extremely online judge'
+                  : 'Opening statements in progress…'}{' '}
+                <ArrowRight aria-hidden="true" size={18} />
               </button>
             </section>
           ) : null}
@@ -601,20 +721,25 @@ export function CourtroomExperience({
           {phase === 'appeal' ? (
             <section className="court-appeal-console" role="status" aria-live="assertive">
               <p className="text-red-400 font-black tracking-widest uppercase text-xs">
-                Supreme Court Final Ruling
+                {appealReveal ? 'Supreme Court Final Ruling' : 'Judges consulting a Magic 8 Ball'}
               </p>
-              <h2>APPEAL DENIED!</h2>
+              <h2>{appealReveal ? 'APPEAL DENIED!' : 'DELIBERATING…'}</h2>
               <p className="court-appeal-proclamation">
-                "YOU ARE NOW BANNED FROM CLICKING FOR THREE BUSINESS CENTURIES!"
+                {appealReveal
+                  ? '“YOU ARE NOW BANNED FROM CLICKING FOR THREE BUSINESS CENTURIES!”'
+                  : 'The court has reviewed your appeal for almost one whole second.'}
               </p>
               <div className="mt-3">
-                <button
-                  type="button"
-                  className="court-primary"
-                  onClick={() => setPhase('certificate')}
-                >
-                  Accept Eternal Ban & View Certificate <ArrowRight aria-hidden="true" size={18} />
-                </button>
+                {appealReveal ? (
+                  <button
+                    type="button"
+                    className="court-primary"
+                    onClick={() => setPhase('certificate')}
+                  >
+                    Accept Eternal Ban & View Certificate{' '}
+                    <ArrowRight aria-hidden="true" size={18} />
+                  </button>
+                ) : null}
               </div>
             </section>
           ) : null}
@@ -660,30 +785,8 @@ export function CourtroomExperience({
   );
 }
 
-function dialogueForPhase(
-  phase: TrialPhase,
-  clicks: number,
-  verdictTitle?: string,
-): readonly SpokenLine[] {
-  if (phase === 'summons')
-    return [
-      {
-        speaker: 'judge',
-        text: 'Order! Order in this browser session! Who gave this individual administrator privileges over a mouse?',
-      },
-      {
-        speaker: 'prosecutor',
-        text: `Your Honor, the prosecution will prove the defendant clicked ${clicks} times without reading paragraph 42 of the Terms!`,
-      },
-      {
-        speaker: 'defense',
-        text: 'Objection! My client was merely exercising their constitutional right to tap glass!',
-      },
-      {
-        speaker: 'clerk',
-        text: 'Logging 13 counts of aggressive audacity. Dignity status: expired.',
-      },
-    ];
+function dialogueForPhase(phase: TrialPhase, verdictTitle?: string): readonly SpokenLine[] {
+  if (phase === 'summons') return [];
   if (phase === 'evidence')
     return [
       {
@@ -733,9 +836,12 @@ function dialogueForPhase(
     return [
       {
         speaker: 'judge',
-        text: 'Three points deducted for failing to splash the prosecution! Pathetic roll!',
+        text: 'Three points deducted! The mud showed more commitment to that landing than you did!',
       },
-      { speaker: 'prosecutor', text: 'Notice how the mud immediately rejected the defendant.' },
+      {
+        speaker: 'prosecutor',
+        text: 'For the record, even the mud has requested emotional damages.',
+      },
     ];
   if (phase === 'spinner')
     return [
@@ -765,7 +871,10 @@ function dialogueForPhase(
         speaker: 'judge',
         text: 'APPEAL DENIED! YOU ARE NOW BANNED FROM CLICKING FOR THREE BUSINESS CENTURIES!',
       },
-      { speaker: 'prosecutor', text: 'The prosecution accepts this glorious victory!' },
+      {
+        speaker: 'prosecutor',
+        text: 'The prosecution accepts this victory and the defendant’s remaining browser cookies.',
+      },
     ];
   return [];
 }

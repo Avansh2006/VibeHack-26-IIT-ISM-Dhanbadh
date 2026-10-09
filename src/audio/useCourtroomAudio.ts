@@ -84,6 +84,7 @@ export function useCourtroomAudio(): CourtroomAudioController {
       try {
         const context = contextRef.current ?? new AudioContext();
         contextRef.current = context;
+        void context.resume();
         const now = context.currentTime;
 
         CUE_FREQUENCIES[cue].forEach((frequency, index) => {
