@@ -1,8 +1,17 @@
-import { useLayoutEffect, useRef } from 'react';
+import { Component, Suspense, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import type { ReactNode } from 'react';
 import { Canvas, type ThreeEvent, useFrame, useThree } from '@react-three/fiber';
-import { ContactShadows, Environment, Float, RoundedBox, Sparkles } from '@react-three/drei';
+import {
+  ContactShadows,
+  Environment,
+  Float,
+  RoundedBox,
+  Sparkles,
+  useGLTF,
+} from '@react-three/drei';
 import { gsap } from 'gsap';
 import * as THREE from 'three';
+import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { Group, Mesh } from 'three';
 import type { CourtroomSpeaker } from '@/audio';
 import type { DefenseId } from '@/components/courtroom/trialLogic';
@@ -12,6 +21,8 @@ export type PunishmentType = 'mud' | 'spinner' | 'apology';
 
 export type TrialPhase =
   | 'summons'
+  | 'news'
+  | 'witness'
   | 'evidence'
   | 'defense'
   | 'objection'
@@ -116,6 +127,17 @@ export default function CourtroomScene3D(props: CourtroomScene3DProps) {
       <pointLight position={[-7.2, 3.8, -1.8]} intensity={16} color="#ff8e7b" distance={8} />
       {/* Defense & Defendant rim */}
       <pointLight position={[5.4, 3.8, 1.6]} intensity={18} color="#7dd5ff" distance={8} />
+      {props.phase === 'witness' ? (
+        <spotLight
+          castShadow
+          position={[8.4, 8.5, 2.6]}
+          target-position={[7.2, 1.8, -2.1]}
+          intensity={68}
+          angle={0.5}
+          penumbra={0.72}
+          color="#e4bcff"
+        />
+      ) : null}
       {/* Clerk rim */}
       <pointLight position={[1.8, 2.8, -3.2]} intensity={14} color="#ffd4a0" distance={7} />
 
@@ -140,9 +162,22 @@ export default function CourtroomScene3D(props: CourtroomScene3DProps) {
         spinnerProgress={props.spinnerProgress ?? 0}
         reducedMotion={props.reducedMotion}
       />
+      {props.phase === 'witness' ? (
+        <WitnessModelBoundary fallback={<ProceduralGirlfriendWitness speaking={false} />}>
+          <Suspense
+            fallback={<ProceduralGirlfriendWitness speaking={props.speaker === 'girlfriend'} />}
+          >
+            <GirlfriendWitness
+              speaking={props.speaker === 'girlfriend'}
+              reducedMotion={props.reducedMotion}
+            />
+          </Suspense>
+        </WitnessModelBoundary>
+      ) : null}
 
       {/* Evidence Holograms */}
       <EvidenceTable exhibits={props.exhibits} phase={props.phase} />
+      <BreakingNewsScreen active={props.phase === 'news'} />
 
       {/* Interactive Gavel */}
       <InteractiveGavel
@@ -943,6 +978,158 @@ function DefendantCharacter({
   );
 }
 
+class WitnessModelBoundary extends Component<
+  { children: ReactNode; fallback: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch() {
+    // The procedural witness keeps the trial playable if the local GLB cannot decode.
+  }
+
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
+
+function GirlfriendWitness({
+  speaking,
+  reducedMotion,
+}: {
+  speaking: boolean;
+  reducedMotion: boolean;
+}) {
+  const entrance = useRef<Group>(null);
+  const { scene } = useGLTF(`${import.meta.env.BASE_URL}models/localhost-girlfriend.glb`);
+  const avatar = useMemo<THREE.Object3D>(() => cloneSkeleton(scene), [scene]);
+  const morphMeshes = useRef<
+    Array<
+      THREE.Mesh & {
+        morphTargetDictionary?: Record<string, number>;
+        morphTargetInfluences?: number[];
+      }
+    >
+  >([]);
+
+  useEffect(() => {
+    const meshes: typeof morphMeshes.current = [];
+    avatar.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) return;
+      child.castShadow = true;
+      child.receiveShadow = true;
+      if (child.material) {
+        const wasArray = Array.isArray(child.material);
+        const source: THREE.Material[] = Array.isArray(child.material)
+          ? (child.material as THREE.Material[])
+          : [child.material as THREE.Material];
+        const clonedMaterials = source.map((material) => {
+          const cloned = material.clone();
+          if (child.name.toLowerCase().includes('hair') && 'color' in cloned) {
+            (cloned as THREE.MeshStandardMaterial).color.set('#7d3fc5');
+          }
+          return cloned;
+        });
+        child.material = wasArray ? clonedMaterials : clonedMaterials[0]!;
+      }
+      const mesh = child as (typeof meshes)[number];
+      if (mesh.morphTargetDictionary && mesh.morphTargetInfluences) meshes.push(mesh);
+    });
+    morphMeshes.current = meshes;
+  }, [avatar]);
+
+  useLayoutEffect(() => {
+    if (!entrance.current) return;
+    const context = gsap.context(() => {
+      gsap.fromTo(
+        entrance.current!.position,
+        { x: 10.8, y: 0, z: -2.1 },
+        {
+          x: 7.2,
+          duration: reducedMotion ? 0 : 1.15,
+          ease: 'back.out(1.15)',
+        },
+      );
+    });
+    return () => context.revert();
+  }, [reducedMotion]);
+
+  useFrame(({ clock }) => {
+    const time = clock.getElapsedTime();
+    const mouth = speaking ? 0.16 + Math.abs(Math.sin(time * 11)) * 0.62 : 0;
+    for (const mesh of morphMeshes.current) {
+      const dictionary = mesh.morphTargetDictionary;
+      const influences = mesh.morphTargetInfluences;
+      if (!dictionary || !influences) continue;
+      for (const key of ['jawOpen', 'mouthOpen', 'viseme_AA', 'viseme_O']) {
+        const index = dictionary[key];
+        // R3F morph targets are intentionally mutated on every animation frame.
+        // eslint-disable-next-line react-hooks/immutability
+        if (index !== undefined) influences[index] = mouth;
+      }
+      const blinkIndex = dictionary.eyeBlinkLeft;
+      const blinkRightIndex = dictionary.eyeBlinkRight;
+      const blink = reducedMotion ? 0 : Math.max(0, Math.sin(time * 1.7) - 0.96) * 24;
+      if (blinkIndex !== undefined) influences[blinkIndex] = blink;
+      if (blinkRightIndex !== undefined) influences[blinkRightIndex] = blink;
+    }
+    if (entrance.current && !reducedMotion) {
+      entrance.current.rotation.y = -0.38 + Math.sin(time * 2.2) * (speaking ? 0.08 : 0.025);
+      entrance.current.rotation.z = speaking ? Math.sin(time * 5) * 0.025 : 0;
+    }
+  });
+
+  return (
+    <group ref={entrance} position={[7.2, 0, -2.1]} rotation={[0, -0.38, 0]}>
+      <primitive object={avatar} scale={1.13} />
+      <pointLight position={[0, 2.5, 1.2]} intensity={18} distance={6} color="#dba8ff" />
+    </group>
+  );
+}
+
+function ProceduralGirlfriendWitness({ speaking }: { speaking: boolean }) {
+  const group = useRef<Group>(null);
+  useFrame(({ clock }) => {
+    if (!group.current) return;
+    group.current.rotation.z = speaking ? Math.sin(clock.getElapsedTime() * 6) * 0.045 : 0;
+  });
+  return (
+    <group ref={group} position={[7.2, 0, -2.1]} rotation={[0, -0.38, 0]}>
+      <mesh castShadow position={[0, 1.3, 0]}>
+        <capsuleGeometry args={[0.44, 1.35, 8, 14]} />
+        <meshStandardMaterial color="#5f2b92" roughness={0.5} />
+      </mesh>
+      <mesh castShadow position={[0, 2.55, 0]}>
+        <sphereGeometry args={[0.47, 20, 16]} />
+        <meshStandardMaterial color="#d9a07c" roughness={0.72} />
+      </mesh>
+      <mesh castShadow position={[0, 2.72, -0.04]} scale={[1.16, 1.06, 1.04]}>
+        <sphereGeometry args={[0.49, 20, 16, 0, Math.PI * 2, 0, Math.PI * 0.62]} />
+        <meshStandardMaterial color="#783bb6" roughness={0.38} />
+      </mesh>
+    </group>
+  );
+}
+
+function BreakingNewsScreen({ active }: { active: boolean }) {
+  return (
+    <group visible={active} position={[0, 4.15, -8.05]}>
+      <RoundedBox args={[8.4, 4.1, 0.18]} radius={0.12} smoothness={3}>
+        <meshStandardMaterial color="#16080d" emissive="#8d0d1e" emissiveIntensity={0.7} />
+      </RoundedBox>
+      <mesh position={[0, -1.62, 0.12]}>
+        <boxGeometry args={[7.7, 0.42, 0.05]} />
+        <meshStandardMaterial color="#e2283f" emissive="#b10d24" emissiveIntensity={1.5} />
+      </mesh>
+      <pointLight position={[0, 0, 3]} intensity={24} color="#ff7b83" distance={10} />
+    </group>
+  );
+}
+
 /* =========================================================================
    3. Interactive Gavel & Floating Evidence Holograms
    ========================================================================= */
@@ -1329,6 +1516,8 @@ const CAMERA_SHOTS: Record<
 > = {
   // Pushed back through doors, gliding smoothly into the majestic warm courtroom
   summons: { position: [0, 3.2, 9.8], target: [0, 2.6, -4.8] },
+  news: { position: [0, 4.1, 1.2], target: [0, 4.1, -8.05] },
+  witness: { position: [3.7, 2.8, 4.3], target: [7.2, 1.8, -2.1] },
   evidence: { position: [4.8, 3.1, 7.2], target: [0, 1.7, 1.1] },
   defense: { position: [2.2, 2.6, 5.8], target: [2.8, 1.8, 2.4] },
   // Dramatic whip pan Dutch angle on prosecutor shouting OBJECTION!
@@ -1352,6 +1541,8 @@ const CAMERA_SHOTS: Record<
   defendant: { position: [2.2, 2.55, 5.2], target: [4.8, 2.0, 2.2] },
   assistant: { position: [1.2, 2.4, 4.8], target: [2.9, 1.8, 2.6] },
   clerk: { position: [0, 2.0, -1.6], target: [0, 1.4, -3.2] },
+  anchor: { position: [0, 4.1, 1.2], target: [0, 4.1, -8.05] },
+  girlfriend: { position: [3.7, 2.8, 4.3], target: [7.2, 1.8, -2.1] },
 };
 
 const DEFAULT_CAMERA_SHOT = { position: [0, 3.2, 9.8], target: [0, 2.6, -4.8] } as const;

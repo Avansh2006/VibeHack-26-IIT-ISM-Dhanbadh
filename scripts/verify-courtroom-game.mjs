@@ -57,7 +57,7 @@ try {
       (async () => {
         const pause = (duration = 100) => new Promise((resolve) => setTimeout(resolve, duration));
         const click = async (label, selector = 'button') => {
-          const deadline = Date.now() + 15000;
+          const deadline = Date.now() + 60000;
           while (Date.now() < deadline) {
             const candidate = [...document.querySelectorAll(selector)].find((element) =>
               element.textContent?.replace(/\\s+/g, ' ').trim().includes(label),
@@ -91,7 +91,7 @@ try {
         // Courtroom stages
         await click('Face the extremely online judge');
         const openingSteps = [];
-        const openingDeadline = Date.now() + 15000;
+        const openingDeadline = Date.now() + 20000;
         while (Date.now() < openingDeadline) {
           const root = document.querySelector('[data-opening-step]');
           const step = root?.getAttribute('data-opening-step');
@@ -102,6 +102,23 @@ try {
         const openingRoot = document.querySelector('[data-opening-step]');
         const openingAudioResult = openingRoot?.getAttribute('data-opening-audio-result');
         const ttsSupported = openingRoot?.getAttribute('data-tts-supported') === 'true';
+        const storyPhases = [];
+        const witnessLines = [];
+        const storyDeadline = Date.now() + 60000;
+        while (Date.now() < storyDeadline) {
+          const root = document.querySelector('[data-story-phase]');
+          const storyPhase = root?.getAttribute('data-story-phase');
+          if (storyPhase && storyPhases.at(-1) !== storyPhase) storyPhases.push(storyPhase);
+          const subtitle = document.querySelector('.court-subtitle p')?.textContent?.trim();
+          if (storyPhase === 'witness' && subtitle && witnessLines.at(-1) !== subtitle) {
+            witnessLines.push(subtitle);
+          }
+          if (storyPhase === 'evidence') break;
+          await pause(40);
+        }
+        const newsResult = document
+          .querySelector('[data-news-result]')
+          ?.getAttribute('data-news-result');
         await click('Attempt a legally questionable defense');
         await click('I was framed by JavaScript');
         await pause(2500); // Wait for objection -> verdict
@@ -137,6 +154,9 @@ try {
           openingSteps,
           openingAudioResult,
           ttsSupported,
+          storyPhases,
+          witnessLines,
+          newsResult,
         };
       })()
     `,
@@ -154,7 +174,11 @@ try {
       state?.openingSteps?.includes(step),
     ) ||
     state?.openingAudioResult !== 'ended' ||
-    !state?.ttsSupported
+    !state?.ttsSupported ||
+    !['news', 'witness', 'evidence'].every((phase) => state?.storyPhases?.includes(phase)) ||
+    state?.newsResult !== 'ended' ||
+    !state?.witnessLines?.some((line) => line.includes('localhost girlfriend')) ||
+    !state?.witnessLines?.some((line) => line.includes("couldn't even commit"))
   ) {
     throw new Error('Courtroom interactive comedy game verification failed.');
   }

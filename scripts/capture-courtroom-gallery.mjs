@@ -70,7 +70,7 @@ try {
     (async () => {
       const pause = (d = 90) => new Promise((r) => setTimeout(r, d));
       const click = async (label) => {
-        const deadline = Date.now() + 15000;
+        const deadline = Date.now() + 60000;
         while (Date.now() < deadline) {
           const el = [...document.querySelectorAll('button')].find(b => b.textContent?.includes(label));
           if (el) { el.click(); await pause(150); return; }

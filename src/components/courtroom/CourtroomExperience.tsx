@@ -30,6 +30,8 @@ export interface CourtroomExperienceProps {
 
 const PHASE_LABELS: Readonly<Record<TrialPhase, string>> = {
   summons: 'Court convening',
+  news: 'Breaking News interruption',
+  witness: 'Surprise witness',
   evidence: 'Exhibits entered',
   defense: 'Questionable defense',
   objection: 'Prosecutorial yelling',
@@ -49,6 +51,8 @@ const SPEAKER_LABELS: Readonly<Record<CourtroomSpeaker, string>> = {
   defense: 'Counsel Error 404',
   clerk: 'Bailiff Bitflip',
   assistant: 'Counsel Error 404',
+  anchor: 'Channel 13 Emergency Desk',
+  girlfriend: 'The Localhost Girlfriend',
 };
 
 const PUNISHMENTS: Readonly<
@@ -124,6 +128,9 @@ export function CourtroomExperience({
   const [openingAudioResult, setOpeningAudioResult] = useState<'pending' | 'ended' | 'failed'>(
     'pending',
   );
+  const [newsResult, setNewsResult] = useState<'pending' | 'ended' | 'skipped' | 'failed'>(
+    'pending',
+  );
   const [appealReveal, setAppealReveal] = useState(false);
 
   // Punishment roulette & mini-game state
@@ -145,7 +152,10 @@ export function CourtroomExperience({
   const speakRef = useRef(speak);
   const dialogueGeneration = useRef(0);
   const openingGeneration = useRef(0);
+  const newsGeneration = useRef(0);
   const mardAudioRef = useRef<HTMLAudioElement | null>(null);
+  const newsVideoRef = useRef<HTMLVideoElement | null>(null);
+  const mutedRef = useRef(muted);
   const summary = useMemo(() => summarizeEvidence(evidenceLog), [evidenceLog]);
   const exhibits = useMemo(() => selectCourtroomExhibits(evidenceLog), [evidenceLog]);
   const verdict = selectedDefense ? getVerdict(selectedDefense, summary) : null;
@@ -154,6 +164,10 @@ export function CourtroomExperience({
   useEffect(() => {
     speakRef.current = speak;
   }, [speak]);
+
+  useEffect(() => {
+    mutedRef.current = muted;
+  }, [muted]);
 
   useEffect(() => {
     startAmbience();
@@ -185,7 +199,7 @@ export function CourtroomExperience({
 
   // Dialogue director
   useEffect(() => {
-    if (phase === 'summons') return;
+    if (phase === 'summons' || phase === 'news') return;
     const generation = dialogueGeneration.current + 1;
     dialogueGeneration.current = generation;
     const lines = dialogueForPhase(phase, verdict?.title);
@@ -205,6 +219,13 @@ export function CourtroomExperience({
         if (dialogueGeneration.current !== generation) return;
         await new Promise((resolve) => window.setTimeout(resolve, reducedMotion ? 80 : 260));
       }
+      if (phase === 'witness' && dialogueGeneration.current === generation) {
+        await new Promise((resolve) => window.setTimeout(resolve, reducedMotion ? 80 : 520));
+        setGavelPulse((value) => value + 1);
+        playCue('gavel');
+        setActiveLine(null);
+        setPhase('evidence');
+      }
     };
 
     void perform();
@@ -213,7 +234,65 @@ export function CourtroomExperience({
       dialogueGeneration.current += 1;
       skipVoice();
     };
-  }, [phase, reducedMotion, summary.totalClicks, verdict?.title, skipVoice]);
+  }, [phase, reducedMotion, summary.totalClicks, verdict?.title, skipVoice, playCue]);
+
+  useEffect(() => {
+    if (phase !== 'news') return;
+    const generation = newsGeneration.current + 1;
+    newsGeneration.current = generation;
+    const video = newsVideoRef.current;
+    const line: SpokenLine = {
+      speaker: 'anchor',
+      text: `Breaking news! Defendant caught clicking ${summary.totalClicks} times. Even his mouse has hired a lawyer!`,
+    };
+
+    const perform = async () => {
+      setNewsResult('pending');
+      setActiveLine(line);
+      if (!video) {
+        setNewsResult('failed');
+        await speakRef.current(line);
+      } else {
+        video.currentTime = 0;
+        video.muted = mutedRef.current;
+        const playback = new Promise<'ended' | 'failed'>((resolve) => {
+          let settled = false;
+          const finish = (result: 'ended' | 'failed') => {
+            if (settled) return;
+            settled = true;
+            video.removeEventListener('ended', handleEnded);
+            video.removeEventListener('error', handleError);
+            resolve(result);
+          };
+          const handleEnded = () => finish('ended');
+          const handleError = () => finish('failed');
+          video.addEventListener('ended', handleEnded, { once: true });
+          video.addEventListener('error', handleError, { once: true });
+          void video.play().catch(() => finish('failed'));
+        });
+        const [, result] = await Promise.all([
+          Promise.race([
+            speakRef.current(line),
+            new Promise((resolve) => window.setTimeout(resolve, 7200)),
+          ]),
+          playback,
+        ]);
+        if (newsGeneration.current !== generation) return;
+        setNewsResult(result);
+      }
+      if (newsGeneration.current !== generation) return;
+      await new Promise((resolve) => window.setTimeout(resolve, reducedMotion ? 80 : 520));
+      setActiveLine(null);
+      setPhase('witness');
+    };
+
+    void perform();
+    return () => {
+      newsGeneration.current += 1;
+      video?.pause();
+      skipVoice();
+    };
+  }, [phase, reducedMotion, skipVoice, summary.totalClicks]);
 
   // Objection -> Verdict auto transition
   useEffect(() => {
@@ -255,6 +334,15 @@ export function CourtroomExperience({
   }, [phase, playCue, reducedMotion]);
 
   const skipDialogue = () => {
+    if (phase === 'news') {
+      newsGeneration.current += 1;
+      newsVideoRef.current?.pause();
+      skipVoice();
+      setNewsResult('skipped');
+      setActiveLine(null);
+      setPhase('witness');
+      return;
+    }
     dialogueGeneration.current += 1;
     skipVoice();
     setActiveLine(null);
@@ -281,6 +369,19 @@ export function CourtroomExperience({
       primedAsset.muted = muted;
     }
 
+    const primedVideo = newsVideoRef.current;
+    if (primedVideo) {
+      primedVideo.muted = true;
+      try {
+        await primedVideo.play();
+        primedVideo.pause();
+        primedVideo.currentTime = 0;
+      } catch {
+        // The interruption still has a reliable TTS/subtitle fallback.
+      }
+      primedVideo.muted = muted;
+    }
+
     const speakOpening = async (line: SpokenLine, minimumDuration: number) => {
       setActiveLine(line);
       await Promise.all([
@@ -303,7 +404,7 @@ export function CourtroomExperience({
     let assetEnded = false;
     if (asset) {
       asset.currentTime = 0;
-      asset.muted = false;
+      asset.muted = muted;
       assetEnded = await new Promise<boolean>((resolve) => {
         const finish = (ended: boolean) => {
           asset.removeEventListener('ended', handleEnded);
@@ -333,7 +434,7 @@ export function CourtroomExperience({
     setOpeningStep('complete');
     setActiveLine(null);
     strikeGavel();
-    setPhase('evidence');
+    setPhase('news');
   };
 
   const chooseDefense = (defense: DefenseId) => {
@@ -400,6 +501,8 @@ export function CourtroomExperience({
       className={`court-experience court-phase-${phase}`}
       data-opening-step={openingStep}
       data-opening-audio-result={openingAudioResult}
+      data-story-phase={phase}
+      data-news-result={newsResult}
       data-tts-supported={voices.supported}
     >
       <div className="court-canvas" aria-hidden="true">
@@ -428,6 +531,20 @@ export function CourtroomExperience({
         )}
       </div>
       <div className="court-vignette" aria-hidden="true" />
+      <div className={`court-news-layer ${phase === 'news' ? 'is-active' : ''}`}>
+        <video
+          ref={newsVideoRef}
+          src={`${import.meta.env.BASE_URL}video/video1.mp4`}
+          playsInline
+          preload="metadata"
+          muted={muted}
+          aria-label="Breaking news courtroom evidence reel"
+        />
+        <div className="court-news-bug" aria-hidden="true">
+          <strong>BREAKING NEWS</strong>
+          <span>LIVE · CLICK CRIME DESK</span>
+        </div>
+      </div>
 
       <header className="court-topbar">
         <div>
@@ -453,7 +570,7 @@ export function CourtroomExperience({
             disabled={!activeLine || (phase === 'summons' && openingStep !== 'ready')}
           >
             <FastForward aria-hidden="true" size={16} />
-            <span>Skip line</span>
+            <span>{phase === 'news' ? 'Skip interruption' : 'Skip line'}</span>
           </button>
           <button
             type="button"
@@ -461,6 +578,7 @@ export function CourtroomExperience({
             onClick={() => {
               skipVoice();
               if (mardAudioRef.current) mardAudioRef.current.muted = !muted;
+              if (newsVideoRef.current) newsVideoRef.current.muted = !muted;
               toggleMute();
             }}
             aria-pressed={muted}
@@ -498,6 +616,24 @@ export function CourtroomExperience({
                   : 'Opening statements in progress…'}{' '}
                 <ArrowRight aria-hidden="true" size={18} />
               </button>
+            </section>
+          ) : null}
+
+          {phase === 'news' ? (
+            <section className="court-news-caption" aria-label="Breaking news interruption">
+              <span>Channel 13½ · Courtroom Crisis Unit</span>
+              <strong>{summary.totalClicks} CLICKS. ZERO ALIBIS.</strong>
+            </section>
+          ) : null}
+
+          {phase === 'witness' ? (
+            <section className="court-witness-caption" aria-label="Surprise witness testimony">
+              <span>SURPRISE WITNESS · CONNECTION: LOCALHOST</span>
+              <strong>Relationship status: uncommitted changes</strong>
+              <small>
+                Exhibit confirms {summary.totalClicks} clicks, {summary.cursorIncidents} suspicious
+                cursor incidents and {summary.escapeAttempts} escape attempts.
+              </small>
             </section>
           ) : null}
 
@@ -786,7 +922,21 @@ export function CourtroomExperience({
 }
 
 function dialogueForPhase(phase: TrialPhase, verdictTitle?: string): readonly SpokenLine[] {
-  if (phase === 'summons') return [];
+  if (phase === 'summons' || phase === 'news') return [];
+  if (phase === 'witness')
+    return [
+      { speaker: 'girlfriend', text: 'YOUR HONOR! I HAVE EVIDENCE!' },
+      { speaker: 'judge', text: 'Who are you?' },
+      {
+        speaker: 'girlfriend',
+        text: 'His girlfriend. Well, technically his localhost girlfriend. He never deployed our relationship.',
+      },
+      {
+        speaker: 'girlfriend',
+        text: "He promised me forever but couldn't even commit to one browser tab!",
+      },
+      { speaker: 'judge', text: "OBJECTION! That's actually devastating." },
+    ];
   if (phase === 'evidence')
     return [
       {

@@ -10,6 +10,7 @@ const previewUrl = process.env.CLICKPOCALYPSE_PREVIEW_URL ?? 'http://127.0.0.1:4
 const reducedMotion = process.env.CLICKPOCALYPSE_REDUCED_MOTION === '1';
 const mobileViewport = process.env.CLICKPOCALYPSE_MOBILE === '1';
 const disableWebGl = process.env.CLICKPOCALYPSE_DISABLE_WEBGL === '1';
+const skipNews = process.env.CLICKPOCALYPSE_SKIP_NEWS === '1';
 const screenshotPath = process.env.CLICKPOCALYPSE_SCREENSHOT_PATH;
 const browserCandidates = [
   process.env.CHROME_PATH,
@@ -68,7 +69,7 @@ try {
       (async () => {
         const pause = (duration = 90) => new Promise((resolve) => setTimeout(resolve, duration));
         const click = async (label, selector = 'button') => {
-          const deadline = Date.now() + 15000;
+          const deadline = Date.now() + 60000;
           while (Date.now() < deadline) {
             const candidate = [...document.querySelectorAll(selector)].find((element) =>
               element.textContent?.replace(/\\s+/g, ' ').trim().includes(label),
@@ -101,6 +102,21 @@ try {
         if (${Boolean(screenshotPath)}) return { courtroomReady: true };
         if (${reducedMotion}) await click('Mute court');
         await click('Face the extremely online judge');
+        const storyPhases = [];
+        const storyDeadline = Date.now() + 60000;
+        let newsSkipped = false;
+        while (Date.now() < storyDeadline) {
+          const root = document.querySelector('[data-story-phase]');
+          const storyPhase = root?.getAttribute('data-story-phase');
+          if (storyPhase && storyPhases.at(-1) !== storyPhase) storyPhases.push(storyPhase);
+          if (${skipNews} && storyPhase === 'news' && !newsSkipped) {
+            await click('Skip interruption');
+            newsSkipped = true;
+          }
+          if (storyPhase === 'evidence') break;
+          await pause(40);
+        }
+        const newsResult = document.querySelector('[data-news-result]')?.getAttribute('data-news-result');
         await click('Attempt a legally questionable defense');
         await click('I was framed by JavaScript');
         await pause(1500);
@@ -113,6 +129,8 @@ try {
           reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
           fallbackVisible,
           muted: document.body.innerText.includes('Unmute court'),
+          storyPhases,
+          newsResult,
         };
       })()
     `,
@@ -144,6 +162,17 @@ try {
   }
   if (reducedMotion && !journeyState.muted) {
     throw new Error('The muted journey did not preserve the mute state.');
+  }
+  if (
+    !['news', 'witness', 'evidence'].every((phase) => journeyState.storyPhases?.includes(phase))
+  ) {
+    throw new Error('The browser journey did not preserve the news-to-witness story flow.');
+  }
+  if (skipNews && journeyState.newsResult !== 'skipped') {
+    throw new Error('The breaking-news skip control did not continue the trial.');
+  }
+  if (!skipNews && journeyState.newsResult !== 'ended') {
+    throw new Error('The breaking-news video did not complete normally.');
   }
   if (
     !journeyState.certificateHref?.startsWith('data:image/svg+xml') ||
