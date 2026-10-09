@@ -1,5 +1,5 @@
 import { motion, useReducedMotion } from 'motion/react';
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -7,7 +7,6 @@ import {
   BarChart3,
   Bell,
   Bot,
-  ChevronDown,
   CircleDot,
   Command,
   FileClock,
@@ -16,14 +15,23 @@ import {
   MousePointer2,
   RotateCcw,
   Search,
-  Settings,
   ShieldCheck,
   SquareTerminal,
   Users,
   type LucideIcon,
 } from 'lucide-react';
 import type { ChaosBeat } from '@/engine/chaosBeats';
-import { CHAOS_STAGE_LABELS, type ChaosStage, type InteractionRecord } from '@/shared/contracts';
+import {
+  DASHBOARD_INTERACTIONS,
+  type DashboardInteractionId,
+} from '@/components/dashboard/dashboardInteractions';
+import {
+  CHAOS_STAGE_LABELS,
+  type ChaosStage,
+  type InteractionMetadata,
+  type InteractionRecord,
+  type InteractionType,
+} from '@/shared/contracts';
 
 interface ChaosDashboardProps {
   beat: ChaosBeat;
@@ -34,13 +42,14 @@ interface ChaosDashboardProps {
   actionEnabled: boolean;
   onAction(this: void): void;
   onReset(this: void): void;
+  onInteraction(this: void, type: InteractionType, metadata: InteractionMetadata): void;
 }
 
 const NAV_ITEMS = [
-  { icon: LayoutDashboard, label: 'Overview', active: true },
-  { icon: Activity, label: 'Incidents', active: false },
-  { icon: BarChart3, label: 'Analytics', active: false },
-  { icon: FileClock, label: 'Evidence', active: false },
+  { icon: LayoutDashboard, label: 'Overview', interaction: 'nav-overview' },
+  { icon: Activity, label: 'Incidents', interaction: 'nav-incidents' },
+  { icon: BarChart3, label: 'Analytics', interaction: 'nav-analytics' },
+  { icon: FileClock, label: 'Evidence', interaction: 'nav-evidence' },
 ] as const;
 
 const STAGE_TONE: Readonly<Record<ChaosStage, { accent: string; status: string; note: string }>> = {
@@ -69,11 +78,29 @@ export function ChaosDashboard({
   actionEnabled,
   onAction,
   onReset,
+  onInteraction,
 }: ChaosDashboardProps) {
+  const [activeNavigation, setActiveNavigation] = useState<DashboardInteractionId>('nav-overview');
+  const [alertsOpen, setAlertsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [lastDashboardAction, setLastDashboardAction] = useState(
+    'Awaiting first questionable decision',
+  );
   const reducedMotion = useReducedMotion() ?? false;
   const tone = STAGE_TONE[chaosStage];
   const sanity = Math.max(0, 100 - progress);
   const recentEvidence = evidenceLog.slice(-5).reverse();
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const visibleEvidence = normalizedSearch
+    ? evidenceLog
+        .filter((record) =>
+          [record.type, record.metadata?.label, record.metadata?.targetId, record.stageAfter]
+            .filter(Boolean)
+            .some((value) => String(value).toLowerCase().includes(normalizedSearch)),
+        )
+        .slice(-10)
+        .reverse()
+    : recentEvidence;
   const cursorIncidents = evidenceLog.filter((record) =>
     ['primary-cta', 'feature-card', 'navigation'].includes(record.type),
   ).length;
@@ -83,6 +110,19 @@ export function ChaosDashboard({
     ['Cursor surveillance', clickCount > 1 ? 'Tracking' : 'Passive', MousePointer2],
     ['Legal escalation', progress >= 54 ? 'Armed' : 'Dormant', Bot],
   ];
+  const activate = (id: DashboardInteractionId) => {
+    const interaction = DASHBOARD_INTERACTIONS[id];
+    onInteraction(interaction.type, interaction.metadata);
+    setLastDashboardAction(interaction.metadata.label);
+    if (id.startsWith('nav-')) setActiveNavigation(id);
+    if (id === 'toggle-alerts') setAlertsOpen((value) => !value);
+    if (interaction.sectionId) {
+      document.getElementById(interaction.sectionId)?.scrollIntoView({
+        behavior: reducedMotion ? 'auto' : 'smooth',
+        block: 'start',
+      });
+    }
+  };
 
   return (
     <div
@@ -107,12 +147,14 @@ export function ChaosDashboard({
           <p className="px-3 pb-2 text-[9px] font-semibold uppercase tracking-[0.16em] text-white/25">
             Workspace
           </p>
-          {NAV_ITEMS.map(({ icon: Icon, label, active }) => (
+          {NAV_ITEMS.map(({ icon: Icon, label, interaction }) => (
             <button
               key={label}
               type="button"
+              onClick={() => activate(interaction)}
+              aria-current={activeNavigation === interaction ? 'page' : undefined}
               className={`flex w-full items-center gap-3 px-3 py-2.5 text-left text-[12px] font-medium transition-colors ${
-                active
+                activeNavigation === interaction
                   ? 'bg-white/[0.075] text-white'
                   : 'text-white/42 hover:bg-white/[0.04] hover:text-white/75'
               }`}
@@ -129,12 +171,9 @@ export function ChaosDashboard({
         </nav>
 
         <div className="mt-auto border-t border-white/[0.075] p-3">
-          <button
-            type="button"
-            className="flex w-full items-center gap-3 px-3 py-2.5 text-[12px] text-white/42 transition hover:bg-white/[0.04] hover:text-white/75"
-          >
-            <Settings size={15} /> Settings
-          </button>
+          <p className="px-3 py-2 text-[9px] uppercase tracking-[0.14em] text-white/24">
+            Evidence policy · immutable
+          </p>
           <div className="mt-2 flex items-center gap-3 border border-white/[0.075] p-3">
             <div className="grid size-7 place-items-center bg-white/[0.08] text-[10px] font-bold">
               AY
@@ -143,7 +182,6 @@ export function ChaosDashboard({
               <p className="truncate text-[11px] font-semibold">Primary suspect</p>
               <p className="truncate text-[9px] text-white/30">admin@localhost</p>
             </div>
-            <ChevronDown className="ml-auto text-white/25" size={13} />
           </div>
         </div>
       </aside>
@@ -163,19 +201,31 @@ export function ChaosDashboard({
             <span className="text-white/72">Liability workspace</span>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <button
-              type="button"
-              className="hidden h-9 w-52 items-center gap-2 border border-white/[0.08] bg-white/[0.025] px-3 text-left text-[10px] text-white/28 transition hover:border-white/15 sm:flex"
+            <form
+              className="hidden h-9 w-52 items-center gap-2 border border-white/[0.08] bg-white/[0.025] px-3 text-[10px] text-white/48 transition focus-within:border-white/20 sm:flex"
+              onSubmit={(event) => {
+                event.preventDefault();
+                activate('search-incidents');
+              }}
             >
-              <Search size={13} /> Search incidents
+              <Search size={13} />
+              <input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                className="min-w-0 flex-1 bg-transparent text-white/70 outline-none placeholder:text-white/25"
+                aria-label="Search incidents"
+                placeholder="Search incidents"
+              />
               <kbd className="ml-auto border border-white/10 px-1.5 py-0.5 font-mono text-[8px]">
-                ⌘K
+                ↵
               </kbd>
-            </button>
+            </form>
             <button
               type="button"
+              onClick={() => activate('toggle-alerts')}
               className="grid size-9 place-items-center border border-white/[0.08] text-white/42 transition hover:bg-white/[0.05] hover:text-white"
               aria-label="Notifications"
+              aria-expanded={alertsOpen}
             >
               <Bell size={14} />
             </button>
@@ -187,9 +237,23 @@ export function ChaosDashboard({
               <RotateCcw size={13} /> <span className="hidden sm:inline">Reset evidence</span>
             </button>
           </div>
+          {alertsOpen ? (
+            <div className="absolute right-4 top-[4.15rem] z-30 w-72 border border-white/10 bg-[#101216] p-4 shadow-2xl sm:right-6 lg:right-8">
+              <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[var(--dashboard-accent)]">
+                Legal alert
+              </p>
+              <p className="mt-2 text-xs leading-5 text-white/65">
+                Interaction #{clickCount} has been retained as evidence. The button denies knowing
+                you.
+              </p>
+            </div>
+          ) : null}
         </header>
 
-        <main className="mx-auto w-full max-w-[1480px] p-4 sm:p-6 lg:p-8">
+        <main
+          id="dashboard-overview"
+          className="mx-auto w-full max-w-[1480px] scroll-mt-20 p-4 sm:p-6 lg:p-8"
+        >
           <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/32">
@@ -203,6 +267,9 @@ export function ChaosDashboard({
               <CircleDot size={12} className="text-[var(--dashboard-accent)]" /> Session recording
               active
             </div>
+            <p className="w-full text-right font-mono text-[9px] text-white/28" aria-live="polite">
+              Last action: {lastDashboardAction}
+            </p>
           </div>
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(20rem,0.75fr)]">
@@ -286,7 +353,10 @@ export function ChaosDashboard({
               </div>
             </motion.section>
 
-            <section className="border border-white/[0.085] bg-[#0d0f12]">
+            <section
+              id="dashboard-analytics"
+              className="scroll-mt-20 border border-white/[0.085] bg-[#0d0f12]"
+            >
               <div className="flex items-center justify-between border-b border-white/[0.075] px-5 py-4">
                 <div>
                   <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-white/27">
@@ -343,12 +413,22 @@ export function ChaosDashboard({
                     </div>
                   ))}
                 </div>
+                <button
+                  type="button"
+                  onClick={() => activate('inspect-sanity')}
+                  className="mt-5 w-full border border-white/10 px-3 py-2 text-[9px] font-bold uppercase tracking-[0.12em] text-white/48 transition hover:border-[var(--dashboard-accent)] hover:text-white"
+                >
+                  Run sanity diagnostic
+                </button>
               </div>
             </section>
           </div>
 
           <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(20rem,0.75fr)]">
-            <section className="border border-white/[0.085] bg-[#0d0f12]">
+            <section
+              id="dashboard-incidents"
+              className="scroll-mt-20 border border-white/[0.085] bg-[#0d0f12]"
+            >
               <div className="flex items-center justify-between border-b border-white/[0.075] px-5 py-4">
                 <div>
                   <p className="text-[9px] uppercase tracking-[0.16em] text-white/27">
@@ -360,8 +440,8 @@ export function ChaosDashboard({
                   {evidenceLog.length} EVENTS
                 </span>
               </div>
-              <div className="min-h-52 overflow-x-auto">
-                {recentEvidence.length ? (
+              <div id="dashboard-evidence" className="min-h-52 scroll-mt-20 overflow-x-auto">
+                {visibleEvidence.length ? (
                   <table className="w-full min-w-[620px] text-left text-[10px]">
                     <thead className="border-b border-white/[0.055] text-[8px] uppercase tracking-[0.14em] text-white/22">
                       <tr>
@@ -372,7 +452,7 @@ export function ChaosDashboard({
                       </tr>
                     </thead>
                     <tbody>
-                      {recentEvidence.map((record) => (
+                      {visibleEvidence.map((record) => (
                         <tr
                           key={record.id}
                           className="border-b border-white/[0.045] text-white/48 transition hover:bg-white/[0.025]"
@@ -401,14 +481,25 @@ export function ChaosDashboard({
                     <div>
                       <Activity className="mx-auto text-white/18" size={22} />
                       <p className="mt-3 text-xs font-medium text-white/45">
-                        No suspicious activity yet
+                        {normalizedSearch ? 'No matching incidents' : 'No suspicious activity yet'}
                       </p>
                       <p className="mt-1 text-[9px] text-white/22">
-                        The audit trail is uncomfortably clean.
+                        {normalizedSearch
+                          ? `The evidence vault denies knowing “${searchQuery.trim()}”.`
+                          : 'The audit trail is uncomfortably clean.'}
                       </p>
                     </div>
                   </div>
                 )}
+              </div>
+              <div className="border-t border-white/[0.075] p-3 text-right">
+                <button
+                  type="button"
+                  onClick={() => activate('verify-audit')}
+                  className="border border-white/10 px-3 py-2 text-[9px] font-bold uppercase tracking-[0.12em] text-white/48 transition hover:border-[var(--dashboard-accent)] hover:text-white"
+                >
+                  Verify audit trail
+                </button>
               </div>
             </section>
 
@@ -460,6 +551,13 @@ export function ChaosDashboard({
                     </p>
                   </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => activate('challenge-forecast')}
+                  className="mt-4 w-full border border-white/10 px-3 py-2 text-[9px] font-bold uppercase tracking-[0.12em] text-white/48 transition hover:border-[var(--dashboard-accent)] hover:text-white"
+                >
+                  Challenge forecast
+                </button>
               </div>
             </section>
           </div>

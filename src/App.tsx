@@ -3,7 +3,7 @@ import { CourtroomExperience } from '@/components/courtroom';
 import { ChaosDashboard } from '@/components/dashboard';
 import { ChaosEffectsLayer } from '@/components/effects';
 import { getChaosBeat, getChaosProgress, useInteractionGateway } from '@/engine';
-import type { InteractionType } from '@/shared/contracts';
+import type { InteractionMetadata, InteractionType } from '@/shared/contracts';
 import { selectEffectiveChaosStage, useChaosStore } from '@/shared/chaosStore';
 
 function App() {
@@ -34,6 +34,13 @@ function App() {
     [clickCount, recordAction],
   );
 
+  const handleDashboardInteraction = useCallback(
+    (type: InteractionType, metadata: InteractionMetadata) => {
+      recordAction(type, metadata);
+    },
+    [recordAction],
+  );
+
   if (chaosStage === 'courtroom') {
     return (
       <CourtroomExperience
@@ -56,6 +63,7 @@ function App() {
         progress={progress}
         actionEnabled={landingActionEnabled}
         onReset={reset}
+        onInteraction={handleDashboardInteraction}
         onAction={() =>
           recordAction(beat.actionType, {
             targetId: 'primary-chaos-cta',
