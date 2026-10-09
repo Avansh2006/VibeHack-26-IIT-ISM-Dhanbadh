@@ -47,6 +47,7 @@ export interface CourtroomScene3DProps {
   reducedMotion: boolean;
   gavelPulse: number;
   onGavel(this: void): void;
+  onWitnessReady(this: void): void;
   onSpinDrag?: ((delta: number) => void) | undefined;
 }
 
@@ -58,6 +59,9 @@ const BRASS_GOLD = '#f2be42';
 const PLASTER_WALL = '#baa188';
 const WAINSCOT_WALL = '#3d1f14';
 const CARPET_RED = '#851a26';
+const GIRLFRIEND_MODEL_URL = `${import.meta.env.BASE_URL}models/localhost-girlfriend.glb`;
+
+useGLTF.preload(GIRLFRIEND_MODEL_URL);
 
 export default function CourtroomScene3D(props: CourtroomScene3DProps) {
   return (
@@ -163,13 +167,19 @@ export default function CourtroomScene3D(props: CourtroomScene3DProps) {
         reducedMotion={props.reducedMotion}
       />
       {props.phase === 'witness' ? (
-        <WitnessModelBoundary fallback={<ProceduralGirlfriendWitness speaking={false} />}>
-          <Suspense
-            fallback={<ProceduralGirlfriendWitness speaking={props.speaker === 'girlfriend'} />}
-          >
+        <WitnessModelBoundary
+          fallback={
+            <ProceduralGirlfriendWitness
+              speaking={props.speaker === 'girlfriend'}
+              onReady={props.onWitnessReady}
+            />
+          }
+        >
+          <Suspense fallback={<WitnessLoadingMarker />}>
             <GirlfriendWitness
               speaking={props.speaker === 'girlfriend'}
               reducedMotion={props.reducedMotion}
+              onReady={props.onWitnessReady}
             />
           </Suspense>
         </WitnessModelBoundary>
@@ -1000,13 +1010,26 @@ class WitnessModelBoundary extends Component<
 function GirlfriendWitness({
   speaking,
   reducedMotion,
+  onReady,
 }: {
   speaking: boolean;
   reducedMotion: boolean;
+  onReady(this: void): void;
 }) {
   const entrance = useRef<Group>(null);
-  const { scene } = useGLTF(`${import.meta.env.BASE_URL}models/localhost-girlfriend.glb`);
+  const { scene } = useGLTF(GIRLFRIEND_MODEL_URL);
   const avatar = useMemo<THREE.Object3D>(() => cloneSkeleton(scene), [scene]);
+  const fit = useMemo(() => {
+    avatar.updateMatrixWorld(true);
+    const bounds = new THREE.Box3().setFromObject(avatar);
+    const size = bounds.getSize(new THREE.Vector3());
+    const center = bounds.getCenter(new THREE.Vector3());
+    const scale = size.y > 0 ? 2.85 / size.y : 1;
+    return {
+      scale,
+      offset: new THREE.Vector3(-center.x * scale, -bounds.min.y * scale, -center.z * scale),
+    };
+  }, [avatar]);
   const morphMeshes = useRef<
     Array<
       THREE.Mesh & {
@@ -1040,14 +1063,15 @@ function GirlfriendWitness({
       if (mesh.morphTargetDictionary && mesh.morphTargetInfluences) meshes.push(mesh);
     });
     morphMeshes.current = meshes;
-  }, [avatar]);
+    onReady();
+  }, [avatar, onReady]);
 
   useLayoutEffect(() => {
     if (!entrance.current) return;
     const context = gsap.context(() => {
       gsap.fromTo(
         entrance.current!.position,
-        { x: 10.8, y: 0, z: -2.1 },
+        { x: 10.8, y: 0, z: -2.05 },
         {
           x: 7.2,
           duration: reducedMotion ? 0 : 1.15,
@@ -1078,27 +1102,34 @@ function GirlfriendWitness({
       if (blinkRightIndex !== undefined) influences[blinkRightIndex] = blink;
     }
     if (entrance.current && !reducedMotion) {
-      entrance.current.rotation.y = -0.38 + Math.sin(time * 2.2) * (speaking ? 0.08 : 0.025);
+      entrance.current.rotation.y = -0.5 + Math.sin(time * 2.2) * (speaking ? 0.08 : 0.025);
       entrance.current.rotation.z = speaking ? Math.sin(time * 5) * 0.025 : 0;
     }
   });
 
   return (
-    <group ref={entrance} position={[7.2, 0, -2.1]} rotation={[0, -0.38, 0]}>
-      <primitive object={avatar} scale={1.13} />
-      <pointLight position={[0, 2.5, 1.2]} intensity={18} distance={6} color="#dba8ff" />
+    <group ref={entrance} position={[7.2, 0, -2.05]} rotation={[0, -0.5, 0]}>
+      <primitive object={avatar} scale={fit.scale} position={fit.offset} />
+      <pointLight position={[0, 2.3, 1.4]} intensity={28} distance={7} color="#e7c5ff" />
     </group>
   );
 }
 
-function ProceduralGirlfriendWitness({ speaking }: { speaking: boolean }) {
+function ProceduralGirlfriendWitness({
+  speaking,
+  onReady,
+}: {
+  speaking: boolean;
+  onReady(this: void): void;
+}) {
   const group = useRef<Group>(null);
+  useEffect(onReady, [onReady]);
   useFrame(({ clock }) => {
     if (!group.current) return;
     group.current.rotation.z = speaking ? Math.sin(clock.getElapsedTime() * 6) * 0.045 : 0;
   });
   return (
-    <group ref={group} position={[7.2, 0, -2.1]} rotation={[0, -0.38, 0]}>
+    <group ref={group} position={[7.2, 0, -2.05]} rotation={[0, -0.5, 0]}>
       <mesh castShadow position={[0, 1.3, 0]}>
         <capsuleGeometry args={[0.44, 1.35, 8, 14]} />
         <meshStandardMaterial color="#5f2b92" roughness={0.5} />
@@ -1111,6 +1142,18 @@ function ProceduralGirlfriendWitness({ speaking }: { speaking: boolean }) {
         <sphereGeometry args={[0.49, 20, 16, 0, Math.PI * 2, 0, Math.PI * 0.62]} />
         <meshStandardMaterial color="#783bb6" roughness={0.38} />
       </mesh>
+    </group>
+  );
+}
+
+function WitnessLoadingMarker() {
+  return (
+    <group position={[7.2, 1.8, -2.05]}>
+      <mesh>
+        <sphereGeometry args={[0.18, 12, 10]} />
+        <meshStandardMaterial color="#dba8ff" emissive="#8d45cb" emissiveIntensity={2} />
+      </mesh>
+      <pointLight intensity={20} distance={5} color="#dba8ff" />
     </group>
   );
 }
@@ -1517,7 +1560,7 @@ const CAMERA_SHOTS: Record<
   // Pushed back through doors, gliding smoothly into the majestic warm courtroom
   summons: { position: [0, 3.2, 9.8], target: [0, 2.6, -4.8] },
   news: { position: [0, 4.1, 1.2], target: [0, 4.1, -8.05] },
-  witness: { position: [3.7, 2.8, 4.3], target: [7.2, 1.8, -2.1] },
+  witness: { position: [5.45, 2.55, 0.45], target: [7.2, 1.95, -2.05] },
   evidence: { position: [4.8, 3.1, 7.2], target: [0, 1.7, 1.1] },
   defense: { position: [2.2, 2.6, 5.8], target: [2.8, 1.8, 2.4] },
   // Dramatic whip pan Dutch angle on prosecutor shouting OBJECTION!
@@ -1542,7 +1585,18 @@ const CAMERA_SHOTS: Record<
   assistant: { position: [1.2, 2.4, 4.8], target: [2.9, 1.8, 2.6] },
   clerk: { position: [0, 2.0, -1.6], target: [0, 1.4, -3.2] },
   anchor: { position: [0, 4.1, 1.2], target: [0, 4.1, -8.05] },
-  girlfriend: { position: [3.7, 2.8, 4.3], target: [7.2, 1.8, -2.1] },
+  girlfriend: { position: [5.45, 2.55, 0.45], target: [7.2, 2.05, -2.05] },
+};
+
+const SPEAKER_CAMERA_SHOTS: Readonly<Partial<Record<CourtroomSpeaker, string>>> = {
+  judge: 'judge',
+  prosecutor: 'prosecutor',
+  defendant: 'defendant',
+  defense: 'defenseSpeaker',
+  assistant: 'assistant',
+  clerk: 'clerk',
+  anchor: 'anchor',
+  girlfriend: 'girlfriend',
 };
 
 const DEFAULT_CAMERA_SHOT = { position: [0, 3.2, 9.8], target: [0, 2.6, -4.8] } as const;
@@ -1559,15 +1613,21 @@ function CameraDirector({
   const { camera } = useThree();
   const focus = useRef({ x: 0, y: 2.6, z: -4.8 });
 
-  // Map speaker to camera key if in dialogue
-  const shotKey =
-    speaker === 'defense' ? 'defenseSpeaker' : speaker && CAMERA_SHOTS[speaker] ? speaker : phase;
+  const shotKey = (speaker ? SPEAKER_CAMERA_SHOTS[speaker] : undefined) ?? phase;
   const shot = CAMERA_SHOTS[shotKey] ?? CAMERA_SHOTS[phase] ?? DEFAULT_CAMERA_SHOT;
 
   useLayoutEffect(() => {
     const context = gsap.context(() => {
       const isAppeal = phase === 'appeal';
-      const duration = reducedMotion ? 0 : isAppeal ? 0.35 : phase === 'summons' ? 2.6 : 1.1;
+      const duration = reducedMotion
+        ? 0
+        : isAppeal
+          ? 0.35
+          : phase === 'summons'
+            ? 2.6
+            : speaker
+              ? 0.46
+              : 0.9;
       const ease = isAppeal ? 'power4.out' : 'power3.inOut';
 
       gsap.to(camera.position, {
@@ -1586,7 +1646,7 @@ function CameraDirector({
       });
     });
     return () => context.revert();
-  }, [camera, phase, reducedMotion, shot]);
+  }, [camera, phase, reducedMotion, shot, speaker]);
 
   useFrame(() => camera.lookAt(focus.current.x, focus.current.y, focus.current.z));
   return null;

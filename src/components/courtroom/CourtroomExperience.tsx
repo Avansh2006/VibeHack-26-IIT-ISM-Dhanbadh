@@ -131,6 +131,7 @@ export function CourtroomExperience({
   const [newsResult, setNewsResult] = useState<'pending' | 'ended' | 'skipped' | 'failed'>(
     'pending',
   );
+  const [witnessReady, setWitnessReady] = useState(false);
   const [appealReveal, setAppealReveal] = useState(false);
 
   // Punishment roulette & mini-game state
@@ -150,16 +151,39 @@ export function CourtroomExperience({
   const { muted, playCue, startAmbience, stop: stopAudio, toggleMute } = audio;
   const { skip: skipVoice, speak } = voices;
   const speakRef = useRef(speak);
-  const dialogueGeneration = useRef(0);
-  const openingGeneration = useRef(0);
-  const newsGeneration = useRef(0);
+  const directorGeneration = useRef(0);
+  const currentMediaCancelRef = useRef<(() => void) | null>(null);
   const mardAudioRef = useRef<HTMLAudioElement | null>(null);
   const newsVideoRef = useRef<HTMLVideoElement | null>(null);
   const mutedRef = useRef(muted);
+  const witnessReadyRef = useRef(false);
+  const witnessReadyResolverRef = useRef<(() => void) | null>(null);
   const summary = useMemo(() => summarizeEvidence(evidenceLog), [evidenceLog]);
   const exhibits = useMemo(() => selectCourtroomExhibits(evidenceLog), [evidenceLog]);
   const verdict = selectedDefense ? getVerdict(selectedDefense, summary) : null;
   const webGlSupported = useMemo(() => hasWebGlSupport(), []);
+
+  const handleWitnessReady = useCallback(() => {
+    witnessReadyRef.current = true;
+    setWitnessReady(true);
+    witnessReadyResolverRef.current?.();
+    witnessReadyResolverRef.current = null;
+  }, []);
+
+  const waitForWitnessReady = useCallback(async () => {
+    if (!webGlSupported || witnessReadyRef.current) return;
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(watchdog);
+        resolve();
+      };
+      const watchdog = window.setTimeout(finish, 12000);
+      witnessReadyResolverRef.current = finish;
+    });
+  }, [webGlSupported]);
 
   useEffect(() => {
     speakRef.current = speak;
@@ -180,13 +204,15 @@ export function CourtroomExperience({
     asset.muted = false;
     mardAudioRef.current = asset;
     return () => {
-      openingGeneration.current += 1;
+      directorGeneration.current += 1;
+      currentMediaCancelRef.current?.();
+      skipVoice();
       asset.pause();
       asset.removeAttribute('src');
       asset.load();
       mardAudioRef.current = null;
     };
-  }, []);
+  }, [skipVoice]);
 
   useEffect(() => {
     if (mardAudioRef.current) mardAudioRef.current.muted = muted;
@@ -197,244 +223,193 @@ export function CourtroomExperience({
     playCue('gavel');
   }, [playCue]);
 
-  // Dialogue director
-  useEffect(() => {
-    if (phase === 'summons' || phase === 'news') return;
-    const generation = dialogueGeneration.current + 1;
-    dialogueGeneration.current = generation;
-    const lines = dialogueForPhase(phase, verdict?.title);
-
-    const perform = async () => {
-      if (phase === 'appeal' && !reducedMotion) {
-        await new Promise((resolve) => window.setTimeout(resolve, 850));
-      }
-      for (const line of lines) {
-        if (dialogueGeneration.current !== generation) return;
-        setActiveLine(line);
-        const fallbackDuration = Math.min(6400, Math.max(1800, line.text.length * 50));
-        await Promise.race([
-          speakRef.current(line),
-          new Promise((resolve) => window.setTimeout(resolve, fallbackDuration)),
-        ]);
-        if (dialogueGeneration.current !== generation) return;
-        await new Promise((resolve) => window.setTimeout(resolve, reducedMotion ? 80 : 260));
-      }
-      if (phase === 'witness' && dialogueGeneration.current === generation) {
-        await new Promise((resolve) => window.setTimeout(resolve, reducedMotion ? 80 : 520));
-        setGavelPulse((value) => value + 1);
-        playCue('gavel');
-        setActiveLine(null);
-        setPhase('evidence');
-      }
-    };
-
-    void perform();
-
-    return () => {
-      dialogueGeneration.current += 1;
-      skipVoice();
-    };
-  }, [phase, reducedMotion, summary.totalClicks, verdict?.title, skipVoice, playCue]);
-
-  useEffect(() => {
-    if (phase !== 'news') return;
-    const generation = newsGeneration.current + 1;
-    newsGeneration.current = generation;
-    const video = newsVideoRef.current;
-    const line: SpokenLine = {
-      speaker: 'anchor',
-      text: `Breaking news! Defendant caught clicking ${summary.totalClicks} times. Even his mouse has hired a lawyer!`,
-    };
-
-    const perform = async () => {
-      setNewsResult('pending');
+  const waitForSpeech = useCallback(
+    async (line: SpokenLine) => {
       setActiveLine(line);
-      if (!video) {
-        setNewsResult('failed');
-        await speakRef.current(line);
-      } else {
-        video.currentTime = 0;
-        video.muted = mutedRef.current;
-        const playback = new Promise<'ended' | 'failed'>((resolve) => {
-          let settled = false;
-          const finish = (result: 'ended' | 'failed') => {
-            if (settled) return;
-            settled = true;
-            video.removeEventListener('ended', handleEnded);
-            video.removeEventListener('error', handleError);
-            resolve(result);
-          };
-          const handleEnded = () => finish('ended');
-          const handleError = () => finish('failed');
-          video.addEventListener('ended', handleEnded, { once: true });
-          video.addEventListener('error', handleError, { once: true });
-          void video.play().catch(() => finish('failed'));
-        });
-        const [, result] = await Promise.all([
-          Promise.race([
-            speakRef.current(line),
-            new Promise((resolve) => window.setTimeout(resolve, 7200)),
-          ]),
-          playback,
-        ]);
-        if (newsGeneration.current !== generation) return;
-        setNewsResult(result);
+      if (mutedRef.current) {
+        await new Promise((resolve) =>
+          window.setTimeout(resolve, reducedMotion ? 160 : Math.min(2200, line.text.length * 34)),
+        );
+        return;
       }
-      if (newsGeneration.current !== generation) return;
-      await new Promise((resolve) => window.setTimeout(resolve, reducedMotion ? 80 : 520));
+      await new Promise<void>((resolve) => {
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(watchdog);
+          resolve();
+        };
+        const watchdog = window.setTimeout(
+          () => {
+            skipVoice();
+            finish();
+          },
+          Math.min(45000, Math.max(15000, line.text.length * 260)),
+        );
+        void speakRef.current(line).then(finish, finish);
+      });
+      await new Promise((resolve) => window.setTimeout(resolve, reducedMotion ? 60 : 640));
+    },
+    [reducedMotion, skipVoice],
+  );
+
+  const waitForMedia = useCallback(
+    (media: HTMLMediaElement, watchdogMs: number) =>
+      new Promise<'ended' | 'failed' | 'skipped'>((resolve) => {
+        let settled = false;
+        const finish = (result: 'ended' | 'failed' | 'skipped') => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(watchdog);
+          media.removeEventListener('ended', handleEnded);
+          media.removeEventListener('error', handleError);
+          if (currentMediaCancelRef.current === cancel) currentMediaCancelRef.current = null;
+          resolve(result);
+        };
+        const handleEnded = () => finish('ended');
+        const handleError = () => finish('failed');
+        const cancel = () => {
+          media.pause();
+          finish('skipped');
+        };
+        const watchdog = window.setTimeout(() => {
+          media.pause();
+          finish('failed');
+        }, watchdogMs);
+        currentMediaCancelRef.current = cancel;
+        media.addEventListener('ended', handleEnded, { once: true });
+        media.addEventListener('error', handleError, { once: true });
+        void media.play().catch(handleError);
+      }),
+    [],
+  );
+
+  const cancelDirector = useCallback(() => {
+    directorGeneration.current += 1;
+    currentMediaCancelRef.current?.();
+    currentMediaCancelRef.current = null;
+    witnessReadyResolverRef.current?.();
+    witnessReadyResolverRef.current = null;
+    skipVoice();
+  }, [skipVoice]);
+
+  useEffect(() => {
+    if (['summons', 'news', 'witness', 'certificate'].includes(phase)) return;
+    const generation = directorGeneration.current + 1;
+    directorGeneration.current = generation;
+    const lines = dialogueForPhase(phase, verdict?.title);
+    const perform = async () => {
+      for (const line of lines) {
+        if (directorGeneration.current !== generation) return;
+        await waitForSpeech(line);
+      }
+      if (directorGeneration.current !== generation) return;
       setActiveLine(null);
-      setPhase('witness');
-    };
-
-    void perform();
-    return () => {
-      newsGeneration.current += 1;
-      video?.pause();
-      skipVoice();
-    };
-  }, [phase, reducedMotion, skipVoice, summary.totalClicks]);
-
-  // Objection -> Verdict auto transition
-  useEffect(() => {
-    if (phase !== 'objection') return;
-    const timeout = window.setTimeout(
-      () => {
-        setPhase('verdict');
-        playCue('verdict');
+      if (phase === 'objection') {
         setGavelPulse((value) => value + 1);
-      },
-      reducedMotion ? 400 : 2100,
-    );
-    return () => window.clearTimeout(timeout);
-  }, [phase, playCue, reducedMotion]);
-
-  // Appeal twist cinematic auto transition to certificate
-  useEffect(() => {
-    if (phase !== 'appeal') return;
-    const revealTimer = window.setTimeout(
-      () => {
+        playCue('verdict');
+        setPhase('verdict');
+      } else if (phase === 'appeal') {
         setAppealReveal(true);
         playCue('buzzer');
-      },
-      reducedMotion ? 120 : 780,
-    );
-    const fanfareTimer = window.setTimeout(() => playCue('cheer'), reducedMotion ? 260 : 1350);
-
-    const completeTimer = window.setTimeout(
-      () => {
-        setPhase('certificate');
-      },
-      reducedMotion ? 1100 : 5200,
-    );
-    return () => {
-      window.clearTimeout(revealTimer);
-      window.clearTimeout(fanfareTimer);
-      window.clearTimeout(completeTimer);
+        playCue('cheer');
+      }
     };
-  }, [phase, playCue, reducedMotion]);
+    void perform();
+    return cancelDirector;
+  }, [cancelDirector, phase, playCue, verdict?.title, waitForSpeech]);
 
   const skipDialogue = () => {
-    if (phase === 'news') {
-      newsGeneration.current += 1;
-      newsVideoRef.current?.pause();
-      skipVoice();
-      setNewsResult('skipped');
-      setActiveLine(null);
-      setPhase('witness');
-      return;
-    }
-    dialogueGeneration.current += 1;
+    if (phase === 'news') setNewsResult('skipped');
+    currentMediaCancelRef.current?.();
     skipVoice();
-    setActiveLine(null);
   };
 
   const startOpeningDialogue = async () => {
     if (openingStep !== 'ready') return;
-    const generation = openingGeneration.current + 1;
-    openingGeneration.current = generation;
-    dialogueGeneration.current += 1;
-    skipVoice();
+    cancelDirector();
+    const generation = directorGeneration.current + 1;
+    directorGeneration.current = generation;
     startAmbience();
+    const isCurrent = () => directorGeneration.current === generation;
 
-    const primedAsset = mardAudioRef.current;
-    if (primedAsset) {
-      primedAsset.muted = true;
+    for (const media of [mardAudioRef.current, newsVideoRef.current]) {
+      if (!media) continue;
+      media.muted = true;
       try {
-        await primedAsset.play();
-        primedAsset.pause();
-        primedAsset.currentTime = 0;
+        await media.play();
+        media.pause();
+        media.currentTime = 0;
       } catch {
-        // Some browsers do not need priming; the real playback path still handles failure.
+        // The explicit playback path below reports failure and continues safely.
       }
-      primedAsset.muted = muted;
+      media.muted = mutedRef.current;
     }
-
-    const primedVideo = newsVideoRef.current;
-    if (primedVideo) {
-      primedVideo.muted = true;
-      try {
-        await primedVideo.play();
-        primedVideo.pause();
-        primedVideo.currentTime = 0;
-      } catch {
-        // The interruption still has a reliable TTS/subtitle fallback.
-      }
-      primedVideo.muted = muted;
-    }
-
-    const speakOpening = async (line: SpokenLine, minimumDuration: number) => {
-      setActiveLine(line);
-      await Promise.all([
-        Promise.race([
-          speakRef.current(line),
-          new Promise((resolve) => window.setTimeout(resolve, 5200)),
-        ]),
-        new Promise((resolve) => window.setTimeout(resolve, minimumDuration)),
-      ]);
-    };
 
     setOpeningStep('defendant');
-    await speakOpening({ speaker: 'defendant', text: 'I AM INNOCENT!' }, reducedMotion ? 450 : 900);
-    if (openingGeneration.current !== generation) return;
+    await waitForSpeech({ speaker: 'defendant', text: 'I AM INNOCENT!' });
+    if (!isCurrent()) return;
 
-    skipVoice();
     setOpeningStep('prosecutor');
     setActiveLine({ speaker: 'prosecutor', text: 'Ek kachori do samosa.' });
-    const asset = mardAudioRef.current;
-    let assetEnded = false;
-    if (asset) {
-      asset.currentTime = 0;
-      asset.muted = muted;
-      assetEnded = await new Promise<boolean>((resolve) => {
-        const finish = (ended: boolean) => {
-          asset.removeEventListener('ended', handleEnded);
-          asset.removeEventListener('error', handleError);
-          resolve(ended);
-        };
-        const handleEnded = () => finish(true);
-        const handleError = () => finish(false);
-        asset.addEventListener('ended', handleEnded, { once: true });
-        asset.addEventListener('error', handleError, { once: true });
-        void asset.play().catch(() => finish(false));
-      });
+    const mard = mardAudioRef.current;
+    let mardResult: 'ended' | 'failed' | 'skipped' = 'failed';
+    if (mard) {
+      mard.currentTime = 0;
+      mard.muted = mutedRef.current;
+      mardResult = await waitForMedia(mard, 20000);
     }
-    setOpeningAudioResult(assetEnded ? 'ended' : 'failed');
-    if (!assetEnded) {
-      await new Promise((resolve) => window.setTimeout(resolve, reducedMotion ? 350 : 1100));
-    }
-    if (openingGeneration.current !== generation) return;
+    setOpeningAudioResult(mardResult === 'ended' ? 'ended' : 'failed');
+    if (!isCurrent()) return;
 
     setOpeningStep('judge');
-    await speakOpening(
-      { speaker: 'judge', text: "ORDER! ORDER! Let's continue with the court." },
-      reducedMotion ? 550 : 1100,
-    );
-    if (openingGeneration.current !== generation) return;
-
+    await waitForSpeech({
+      speaker: 'judge',
+      text: "ORDER! ORDER! Let's continue with the court.",
+    });
+    if (!isCurrent()) return;
     setOpeningStep('complete');
+    strikeGavel();
+
+    setPhase('news');
+    setNewsResult('pending');
+    const newsLine: SpokenLine = {
+      speaker: 'anchor',
+      text: `Breaking news! Defendant caught clicking ${summary.totalClicks} times. Even his mouse has hired a lawyer!`,
+    };
+    const video = newsVideoRef.current;
+    setActiveLine(newsLine);
+    if (video) {
+      video.currentTime = 0;
+      video.muted = mutedRef.current;
+      const [videoResult] = await Promise.all([
+        waitForMedia(video, 90000),
+        waitForSpeech(newsLine),
+      ]);
+      setNewsResult(videoResult);
+    } else {
+      setNewsResult('failed');
+      await waitForSpeech(newsLine);
+    }
+    if (!isCurrent()) return;
+
+    setPhase('witness');
+    witnessReadyRef.current = false;
+    setWitnessReady(false);
+    await waitForWitnessReady();
+    if (!isCurrent()) return;
+    if (!reducedMotion) {
+      await new Promise((resolve) => window.setTimeout(resolve, 560));
+    }
+    for (const line of dialogueForPhase('witness')) {
+      if (!isCurrent()) return;
+      await waitForSpeech(line);
+    }
+    if (!isCurrent()) return;
     setActiveLine(null);
     strikeGavel();
-    setPhase('news');
+    setPhase('evidence');
   };
 
   const chooseDefense = (defense: DefenseId) => {
@@ -504,6 +479,8 @@ export function CourtroomExperience({
       data-story-phase={phase}
       data-news-result={newsResult}
       data-tts-supported={voices.supported}
+      data-active-speaker={activeLine?.speaker ?? 'none'}
+      data-witness-ready={witnessReady}
     >
       <div className="court-canvas" aria-hidden="true">
         {webGlSupported ? (
@@ -521,6 +498,7 @@ export function CourtroomExperience({
               reducedMotion={reducedMotion}
               gavelPulse={gavelPulse}
               onGavel={strikeGavel}
+              onWitnessReady={handleWitnessReady}
               onSpinDrag={(delta) =>
                 setSpinnerProgress((prev) => Math.min(100, Math.max(0, prev + delta)))
               }

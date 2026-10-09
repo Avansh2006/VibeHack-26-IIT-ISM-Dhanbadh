@@ -7,6 +7,7 @@ import path from 'node:path';
 
 const previewUrl = process.env.CLICKPOCALYPSE_PREVIEW_URL ?? 'http://127.0.0.1:4173';
 const screenshotDir = process.env.CLICKPOCALYPSE_SCREENSHOT_DIR;
+const witnessScreenshotPath = process.env.CLICKPOCALYPSE_WITNESS_SCREENSHOT;
 
 const browserCandidates = [
   process.env.CHROME_PATH,
@@ -113,6 +114,19 @@ try {
           if (storyPhase === 'witness' && subtitle && witnessLines.at(-1) !== subtitle) {
             witnessLines.push(subtitle);
           }
+          if (
+            ${Boolean(process.env.CLICKPOCALYPSE_WITNESS_SCREENSHOT)} &&
+            storyPhase === 'witness' &&
+            root?.getAttribute('data-active-speaker') === 'girlfriend' &&
+            root?.getAttribute('data-witness-ready') === 'true'
+          ) {
+            await pause(520);
+            return {
+              witnessCaptureReady: true,
+              witnessSpeaker: 'girlfriend',
+              witnessReady: root.getAttribute('data-witness-ready'),
+            };
+          }
           if (storyPhase === 'evidence') break;
           await pause(40);
         }
@@ -164,6 +178,19 @@ try {
 
   const state = journeyResult.result?.value;
   process.stdout.write(`${JSON.stringify({ result: state })}\n`);
+
+  if (witnessScreenshotPath && state?.witnessCaptureReady) {
+    const screenshot = await send('Page.captureScreenshot', {
+      format: 'png',
+      captureBeyondViewport: false,
+    });
+    await writeFile(witnessScreenshotPath, Buffer.from(screenshot.data, 'base64'));
+    process.stdout.write(`Witness screenshot saved to ${witnessScreenshotPath}\n`);
+    socket.close();
+    browser.kill();
+    await rm(temporaryRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 150 });
+    process.exit(0);
+  }
 
   if (
     !state?.mudPassed ||
