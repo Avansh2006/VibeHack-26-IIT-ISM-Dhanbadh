@@ -44,7 +44,8 @@ export function useCourtroomAudio(): CourtroomAudioController {
 
           oscillator.type = cue === 'gavel' ? 'square' : 'sine';
           oscillator.frequency.setValueAtTime(frequency, start);
-          if (cue === 'gavel') oscillator.frequency.exponentialRampToValueAtTime(42, start + duration);
+          if (cue === 'gavel')
+            oscillator.frequency.exponentialRampToValueAtTime(42, start + duration);
           gain.gain.setValueAtTime(cue === 'gavel' ? 0.12 : 0.055, start);
           gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
           oscillator.connect(gain);

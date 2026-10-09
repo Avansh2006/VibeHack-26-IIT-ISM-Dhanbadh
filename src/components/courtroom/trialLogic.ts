@@ -114,7 +114,8 @@ export function getVerdict(defense: DefenseId, summary: EvidenceSummary): Verdic
     return {
       title: 'Guilty of Reckless Runtime Enablement',
       ruling: `JavaScript admitted to everything, then pointed out that you personally supplied ${summary.cursorIncidents} suspicious cursor incidents.`,
-      sentence: 'You are sentenced to maintain one legacy dependency with no documentation and a release note reading “misc fixes.”',
+      sentence:
+        'You are sentenced to maintain one legacy dependency with no documentation and a release note reading “misc fixes.”',
       menaceLevel: 'Asynchronous Public Nuisance',
     };
   }
@@ -122,7 +123,8 @@ export function getVerdict(defense: DefenseId, summary: EvidenceSummary): Verdic
   return {
     title: 'Contempt of Browser',
     ruling: `The fifth tab was located playing music somewhere. It declined to testify. Your ${summary.escapeAttempts} escape attempts did not help.`,
-    sentence: 'You must identify which tab is making noise without using the speaker icon, then close a cookie banner using only moral persuasion.',
+    sentence:
+      'You must identify which tab is making noise without using the speaker icon, then close a cookie banner using only moral persuasion.',
     menaceLevel: 'Tabbed Menace with Intent to Refresh',
   };
 }

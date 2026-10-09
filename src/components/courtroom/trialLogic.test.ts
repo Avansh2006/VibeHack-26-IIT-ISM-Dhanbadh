@@ -54,8 +54,8 @@ describe('courtroom trial logic', () => {
     ]);
 
     const summary = summarizeEvidence(evidence);
-    expect(new Set(DEFENSE_OPTIONS.map((option) => getVerdict(option.id, summary).title)).size).toBe(
-      3,
-    );
+    expect(
+      new Set(DEFENSE_OPTIONS.map((option) => getVerdict(option.id, summary).title)).size,
+    ).toBe(3);
   });
 });

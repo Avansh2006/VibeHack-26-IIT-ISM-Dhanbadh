@@ -7,7 +7,8 @@ import {
   ShieldAlert,
   Sparkles,
 } from 'lucide-react';
-import { ChaosEffectsLayer, CourtroomBridge } from '@/components/effects';
+import { CourtroomExperience } from '@/components/courtroom';
+import { ChaosEffectsLayer } from '@/components/effects';
 import { getChaosBeat, getChaosProgress, useInteractionGateway } from '@/engine';
 import { CHAOS_STAGE_LABELS, type InteractionType } from '@/shared/contracts';
 import { selectEffectiveChaosStage, useChaosStore } from '@/shared/chaosStore';
@@ -23,6 +24,8 @@ function App() {
   const chaosStage = useChaosStore((state) => state.chaosStage);
   const effectiveStage = useChaosStore(selectEffectiveChaosStage);
   const evidenceLog = useChaosStore((state) => state.evidenceLog);
+  const sessionId = useChaosStore((state) => state.sessionId);
+  const startedAt = useChaosStore((state) => state.startedAt);
   const reset = useChaosStore((state) => state.reset);
   const { recordAction } = useInteractionGateway();
   const beat = getChaosBeat(clickCount);
@@ -42,9 +45,13 @@ function App() {
 
   if (chaosStage === 'courtroom') {
     return (
-      <div className="min-h-screen bg-[#070403]">
-        <CourtroomBridge evidenceLog={evidenceLog} onReset={reset} />
-      </div>
+      <CourtroomExperience
+        key={sessionId}
+        sessionId={sessionId}
+        startedAt={startedAt}
+        evidenceLog={evidenceLog}
+        onReplay={reset}
+      />
     );
   }
 
