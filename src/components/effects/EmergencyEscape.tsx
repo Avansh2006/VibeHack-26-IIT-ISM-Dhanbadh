@@ -15,7 +15,7 @@ const ESCAPE_OFFSETS = [
 export function EmergencyEscape({ beat, onEscape }: EmergencyEscapeProps) {
   const [evasions, setEvasions] = useState(0);
 
-  const offset = evasions === 0 ? { x: 0, y: 0 } : ESCAPE_OFFSETS[evasions - 1] ?? { x: 0, y: 0 };
+  const offset = evasions === 0 ? { x: 0, y: 0 } : (ESCAPE_OFFSETS[evasions - 1] ?? { x: 0, y: 0 });
 
   return (
     <aside

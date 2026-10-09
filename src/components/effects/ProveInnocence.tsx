@@ -58,7 +58,11 @@ export function ProveInnocence({
               onClick={() => onStatement(beat.actionType, beat.actionLabel)}
               className="group flex min-h-16 w-full items-center justify-center gap-3 rounded-2xl bg-white px-5 py-4 text-base font-black text-fuchsia-950 shadow-[0_0_35px_rgba(255,255,255,0.25)] transition hover:-translate-y-1 focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-white motion-reduce:transform-none"
             >
-              {clickCount === 12 ? <BadgeCheck aria-hidden="true" /> : <FileWarning aria-hidden="true" />}
+              {clickCount === 12 ? (
+                <BadgeCheck aria-hidden="true" />
+              ) : (
+                <FileWarning aria-hidden="true" />
+              )}
               {beat.actionLabel}
             </button>
           ) : (

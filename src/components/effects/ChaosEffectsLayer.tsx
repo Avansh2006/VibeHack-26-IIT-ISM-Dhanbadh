@@ -72,7 +72,11 @@ export function ChaosEffectsLayer({
   }, [chaosStage, clickCount, prefersReducedMotion]);
 
   return (
-    <div ref={layerRef} className="pointer-events-none fixed inset-0 z-30 overflow-hidden" aria-live="polite">
+    <div
+      ref={layerRef}
+      className="pointer-events-none fixed inset-0 z-30 overflow-hidden"
+      aria-live="polite"
+    >
       <div
         aria-hidden="true"
         className={`absolute inset-0 transition-colors duration-500 ${

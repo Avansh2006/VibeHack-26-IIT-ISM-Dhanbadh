@@ -44,9 +44,14 @@ export function CourtroomBridge({ evidenceLog, onReset }: CourtroomBridgeProps) 
             </p>
             <ol className="mt-4 space-y-3">
               {exhibits.map((record) => (
-                <li key={record.id} className="rounded-2xl border border-white/8 bg-white/[0.04] p-4">
+                <li
+                  key={record.id}
+                  className="rounded-2xl border border-white/8 bg-white/[0.04] p-4"
+                >
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-xs font-black text-amber-300">EXHIBIT {record.sequence}</span>
+                    <span className="text-xs font-black text-amber-300">
+                      EXHIBIT {record.sequence}
+                    </span>
                     <span className="text-[10px] uppercase tracking-wider text-white/35">
                       {record.stageAfter}
                     </span>
