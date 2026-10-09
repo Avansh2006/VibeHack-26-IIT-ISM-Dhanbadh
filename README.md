@@ -5,6 +5,7 @@
 CLICKPOCALYPSE is an interactive comedy experience for the VibeHack '26 IIT (ISM) Dhanbad challenge “Chaos Click.” It begins as a suspiciously polished SaaS dashboard, escalates through 13 evidence-producing interactions, and puts the user on trial for crimes against interface stability.
 
 **Live:** [avansh2006.github.io/VibeHack-26-IIT-ISM-Dhanbadh](https://avansh2006.github.io/VibeHack-26-IIT-ISM-Dhanbadh/)
+**Video Link:** [https://youtu.be/-BLhu_TS2q4] (https://youtu.be/-BLhu_TS2q4)
 
 ## Experience
 
