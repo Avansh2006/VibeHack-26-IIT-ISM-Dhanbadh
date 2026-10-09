@@ -8,7 +8,7 @@ function createInteractionId(targetId: string): string {
 }
 
 export interface InteractionGateway {
-  recordAction(type: InteractionType, metadata?: InteractionMetadata): void;
+  recordAction(this: void, type: InteractionType, metadata?: InteractionMetadata): void;
 }
 
 export function useInteractionGateway(): InteractionGateway {
