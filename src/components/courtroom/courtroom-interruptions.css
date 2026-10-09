@@ -1,0 +1,186 @@
+.court-interruption {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(3, 4, 8, 0.94);
+  color: white;
+}
+.court-interruption > div,
+.court-paper-form {
+  width: min(92vw, 38rem);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  padding: clamp(1.25rem, 4vw, 2.5rem);
+  background: #101218;
+  box-shadow: 0 2rem 7rem #000;
+}
+.court-interruption span,
+.court-paper-form > p {
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  color: #f2be42;
+}
+.court-loading h1,
+.court-update h2 {
+  margin: 0.35rem 0;
+  font:
+    900 clamp(3.5rem, 12vw, 8rem)/1 Georgia,
+    serif;
+}
+.court-interruption-track {
+  height: 0.45rem;
+  background: #252831;
+}
+.court-interruption-track i {
+  display: block;
+  height: 100%;
+  background: #f2be42;
+  transition: width 0.24s ease;
+}
+.court-interruption p {
+  margin: 0.8rem 0;
+  color: rgba(255, 255, 255, 0.62);
+}
+.court-interruption button,
+.court-password-prison button {
+  min-height: 2.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 0.65rem 1rem;
+  background: #1a1d24;
+  color: white;
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+.court-interruption button:hover,
+.court-password-prison button:hover {
+  border-color: #f2be42;
+}
+.court-paper-form {
+  position: relative;
+  display: grid;
+  gap: 1rem;
+  background: #eee6d4;
+  color: #21180f;
+  transform: rotate(-0.35deg);
+}
+.court-paper-form h2 {
+  margin: 0;
+  font:
+    900 clamp(1.8rem, 5vw, 3rem)/1 Georgia,
+    serif;
+}
+.court-paper-form label {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.court-paper-form input {
+  border: 0;
+  border-bottom: 2px solid #44392d;
+  padding: 0.65rem;
+  background: transparent;
+  color: #21180f;
+  outline: none;
+}
+.court-paper-form strong {
+  border: 2px solid #a51d2d;
+  padding: 0.7rem;
+  color: #a51d2d;
+  text-align: center;
+  text-transform: uppercase;
+}
+.court-paper-form > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.court-interruption-close {
+  position: absolute;
+  right: 0.65rem;
+  top: 0.65rem;
+  padding: 0.4rem !important;
+  color: #21180f !important;
+  background: transparent !important;
+}
+.court-update > div {
+  text-align: center;
+}
+.court-password-prison {
+  width: min(94vw, 48rem);
+  max-height: 74dvh;
+  overflow: auto;
+  border: 1px solid rgba(242, 190, 66, 0.45);
+  padding: clamp(1rem, 3vw, 2rem);
+  background: #0d1018;
+  color: white;
+  box-shadow: 0 2rem 7rem #000;
+}
+.court-password-prison > p {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #f2be42;
+  font-size: 0.65rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+}
+.court-password-prison h2 {
+  margin: 0.5rem 0;
+  font:
+    900 clamp(2rem, 7vw, 4rem)/1 Georgia,
+    serif;
+}
+.court-password-prison blockquote {
+  margin: 1rem 0;
+  border-left: 3px solid #f2be42;
+  padding: 0.8rem 1rem;
+  background: rgba(242, 190, 66, 0.07);
+  color: rgba(255, 255, 255, 0.7);
+}
+.court-password-prison input {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 1rem;
+  background: #06070a;
+  color: white;
+  font: 700 1rem monospace;
+  outline: none;
+}
+.court-password-prison ul {
+  display: grid;
+  gap: 0.45rem;
+  margin: 1rem 0;
+  padding: 0;
+  list-style: none;
+}
+.court-password-prison li {
+  border: 1px solid rgba(255, 100, 100, 0.25);
+  padding: 0.65rem;
+  color: #ff9f9f;
+  font: 700 0.72rem monospace;
+  transition: 0.2s;
+}
+.court-password-prison li.is-valid {
+  border-color: rgba(120, 255, 170, 0.35);
+  color: #8fffb8;
+  transform: translateX(0.25rem);
+}
+.court-password-prison > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.court-password-prison button:disabled {
+  opacity: 0.3;
+}
+@media (prefers-reduced-motion: reduce) {
+  .court-interruption-track i,
+  .court-password-prison li {
+    transition: none;
+  }
+}

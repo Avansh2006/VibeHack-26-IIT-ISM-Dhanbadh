@@ -14,6 +14,8 @@ const mobileViewport = process.env.CLICKPOCALYPSE_MOBILE === '1';
 const mouseDefense = process.env.CLICKPOCALYPSE_MOUSE_DEFENSE === '1';
 const skipMemes = process.env.CLICKPOCALYPSE_SKIP_MEMES === '1';
 const skipArrest = process.env.CLICKPOCALYPSE_SKIP_ARREST === '1';
+const gagAudit = process.env.CLICKPOCALYPSE_GAG_AUDIT === '1';
+const passwordPrison = process.env.CLICKPOCALYPSE_PASSWORD_PRISON === '1';
 
 const browserCandidates = [
   process.env.CHROME_PATH,
@@ -109,6 +111,16 @@ try {
 
         // Advance through chaos stages to courtroom
         await click('Begin responsible clicking');
+        let hydraPassed = true;
+        if (${gagAudit}) {
+          const hydra = document.querySelector('input[type="checkbox"]');
+          hydraPassed = Boolean(hydra);
+          hydra?.click();
+          await pause(120);
+          hydraPassed = hydraPassed && document.body.innerText.includes('Each agreement creates two');
+          await click('Reset evidence');
+          await click('Begin responsible clicking');
+        }
         await click('That proves nothing');
         await click('Inspect the alleged evidence');
         await click('Request emergency exit');
@@ -117,14 +129,34 @@ try {
         await click('File an appeal');
         await click('button looked emotionally available');
         await click('lawyer who understands CSS');
-        await click('Weather is not admissible evidence');
-        await click('Test structural integrity');
+        await click('A samosa wearing glasses');
+        const captchaPassed = document.body.innerText.includes('Bot behavior detected');
+        await click('Skip impossible CAPTCHA');
         await click('Decline pixel demands');
         await click('PROVE MY INNOCENCE');
         await pause(1600);
 
         // Courtroom stages
         if (${fastMode}) await click('Mute court');
+        let bailPassed = true;
+        if (${gagAudit}) {
+          await click('Apply for imaginary bail');
+          [...document.querySelectorAll('.court-paper-form input')].forEach((input, index) => {
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(
+              input,
+              ['HTML positive', 'Better Call Scroll', 'traffic light'][index],
+            );
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+          });
+          document
+            .querySelector('.court-paper-form')
+            .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+          await pause(180);
+          bailPassed = document
+            .querySelector('.court-paper-form [role="status"]')
+            ?.textContent?.includes('Rejected. Blue ink required.');
+          await click('Abandon bail');
+        }
         await click('Face the extremely online judge');
         const openingSteps = [];
         const openingDeadline = Date.now() + 20000;
@@ -186,24 +218,42 @@ try {
         await click("I'm innocent");
         await click("I'm innocent");
         await click("I'm innocent");
+        let updatePassed = true;
+        if (${gagAudit}) {
+          await click('Install verdict update');
+          const updateDeadline = Date.now() + 10000;
+          while (Date.now() < updateDeadline && document.querySelector('.court-update')) await pause(40);
+          updatePassed = !document.querySelector('.court-update');
+        }
         await click('Begin absurd sentencing');
         await click('404 years buffering');
 
         // Enter Punishment Roulette
         await pause(500);
-        await click('Mud of Shame');
+        await click(${JSON.stringify(passwordPrison ? 'Password Prison' : 'Mud of Shame')});
 
         // Serve Mud of Shame
-        await click('Serve Punishment: Mud of Shame');
+        await click(${JSON.stringify(passwordPrison ? 'Serve Punishment: Password Prison' : 'Serve Punishment: Mud of Shame')});
         await pause(1000);
-        const mudPassed = document.body.innerText.includes('Mud of Shame');
+        let mudPassed = document.body.innerText.includes(${JSON.stringify(passwordPrison ? 'Password Prison' : 'Mud of Shame')});
 
-        // Roll again in shame
-        await click('Roll Again in Shame');
-        await pause(600);
+        if (${passwordPrison}) {
+          const password = document.querySelector('input[aria-label="Prison password"]');
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(
+            password,
+            'Samosa13!',
+          );
+          password.dispatchEvent(new Event('input', { bubbles: true }));
+          await pause(160);
+          await click('Unlock sentence');
+          mudPassed = mudPassed && document.body.innerText.includes('Annoyingly competent');
+        } else {
+          await click('Roll Again in Shame');
+          await pause(600);
+        }
 
         // Trigger appeal
-        await click('File an Immediate Appeal');
+        await click(${JSON.stringify(passwordPrison ? 'Appeal password incarceration' : 'File an Immediate Appeal')});
         const appealDeadline = Date.now() + 30000;
         while (Date.now() < appealDeadline && !document.body.innerText.includes('APPEAL DENIED')) {
           await pause(40);
@@ -244,6 +294,10 @@ try {
           skippedMemeReactions,
           arrestStatuses,
           postCreditsPassed,
+          hydraPassed,
+          captchaPassed,
+          bailPassed,
+          updatePassed,
         };
       })()
     `,
@@ -289,6 +343,10 @@ try {
     !state?.appealPassed ||
     !state?.certificatePassed ||
     !state?.postCreditsPassed ||
+    !state?.hydraPassed ||
+    !state?.captchaPassed ||
+    !state?.bailPassed ||
+    !state?.updatePassed ||
     !state?.hasPunishmentOnCertificate ||
     !['defendant', 'prosecutor', 'judge', 'complete'].every((step) =>
       state?.openingSteps?.includes(step),
@@ -306,8 +364,8 @@ try {
       'girlfriend-breakup',
       'golden-samosa',
       'guilty-verdict',
-      'failed-appeal',
       'judge-collapse',
+      ...(passwordPrison ? [] : ['failed-appeal']),
     ].every((reaction) => state?.memeReactions?.includes(reaction)) ||
     (mouseDefense && !state?.memeReactions?.includes('unexpected-witness')) ||
     !state?.arrestStatuses?.some((status) => ['ended', 'skipped'].includes(status)) ||

@@ -9,6 +9,12 @@ import {
 } from '@/audio';
 import { DigitalMenaceCertificate } from '@/components/certificate';
 import {
+  BailForm,
+  FakeOsUpdate,
+  LegalLoadingSimulator,
+  PasswordPrison,
+} from '@/components/courtroom/CourtroomInterruptions';
+import {
   MemeReaction,
   type MemePlaybackResult,
   type MemeReactionHandle,
@@ -56,6 +62,7 @@ const PHASE_LABELS: Readonly<Record<TrialPhase, string>> = {
   mud: 'Mud of Shame',
   spinner: 'Human loading spinner',
   apology: 'Court-ordered apology',
+  password: 'Password prison',
   appeal: 'The final twist',
   certificate: 'Menace certified',
 };
@@ -97,6 +104,12 @@ const PUNISHMENTS: Readonly<
     subtitle: 'Recite unhinged confessions',
     description: 'Apologize to every bruised pixel while the scrollbar refuses eye contact.',
     angle: (Math.PI * 4) / 3,
+  },
+  password: {
+    title: 'Password Prison',
+    subtitle: 'Thirty seconds of credential despair',
+    description: 'Satisfy a password policy authored by a vindictive samosa.',
+    angle: Math.PI / 2,
   },
 };
 
@@ -164,6 +177,9 @@ export function CourtroomExperience({
     'pending',
   );
   const [postCredits, setPostCredits] = useState<'idle' | 'playing' | 'complete'>('idle');
+  const [legalProcessingComplete, setLegalProcessingComplete] = useState(false);
+  const [bailOpen, setBailOpen] = useState(false);
+  const [osUpdateOpen, setOsUpdateOpen] = useState(false);
 
   // Punishment roulette & mini-game state
   const [selectedPunishment, setSelectedPunishment] = useState<PunishmentType>('mud');
@@ -584,7 +600,7 @@ export function CourtroomExperience({
     if (rouletteSpinning) return;
     setRouletteSpinning(true);
     playCue('spin');
-    const punishments: PunishmentType[] = ['mud', 'spinner', 'apology'];
+    const punishments: PunishmentType[] = ['mud', 'spinner', 'apology', 'password'];
     const pick = punishments[Math.floor(Math.random() * punishments.length)] ?? 'mud';
     setSelectedPunishment(pick);
 
@@ -616,10 +632,14 @@ export function CourtroomExperience({
       setPhase('spinner');
       playCue('spin');
       strikeGavel();
-    } else {
+    } else if (type === 'apology') {
       setSelectedApology(null);
       setPunishmentSentence('Court-Ordered Apology (Maximum Contempt)');
       setPhase('apology');
+      strikeGavel();
+    } else {
+      setPunishmentSentence('Password Prison (Credentials Pending)');
+      setPhase('password');
       strikeGavel();
     }
   };
@@ -664,6 +684,10 @@ export function CourtroomExperience({
     );
   }
 
+  if (!legalProcessingComplete) {
+    return <LegalLoadingSimulator onComplete={() => setLegalProcessingComplete(true)} />;
+  }
+
   return (
     <div
       className={`court-experience court-phase-${phase}`}
@@ -704,6 +728,8 @@ export function CourtroomExperience({
         )}
       </div>
       <div className="court-vignette" aria-hidden="true" />
+      {bailOpen ? <BailForm onClose={() => setBailOpen(false)} /> : null}
+      {osUpdateOpen ? <FakeOsUpdate onComplete={() => setOsUpdateOpen(false)} /> : null}
       <div className={`court-news-layer ${phase === 'news' ? 'is-active' : ''}`}>
         <video
           ref={newsVideoRef}
@@ -796,6 +822,9 @@ export function CourtroomExperience({
                   ? 'Face the extremely online judge'
                   : 'Opening statements in progress…'}{' '}
                 <ArrowRight aria-hidden="true" size={18} />
+              </button>
+              <button type="button" className="court-control" onClick={() => setBailOpen(true)}>
+                Apply for imaginary bail
               </button>
             </section>
           ) : null}
@@ -953,6 +982,14 @@ export function CourtroomExperience({
                 >
                   Issue my Digital Menace certificate
                 </button>
+                <button
+                  type="button"
+                  className="court-control"
+                  disabled={!verdictReady}
+                  onClick={() => setOsUpdateOpen(true)}
+                >
+                  Install verdict update
+                </button>
               </div>
             </section>
           ) : null}
@@ -1008,7 +1045,7 @@ export function CourtroomExperience({
               </div>
 
               <div className="court-roulette-options">
-                {(['mud', 'spinner', 'apology'] as const).map((type) => {
+                {(['mud', 'spinner', 'apology', 'password'] as const).map((type) => {
                   const p = PUNISHMENTS[type];
                   return (
                     <button
@@ -1151,6 +1188,19 @@ export function CourtroomExperience({
                 </button>
               </div>
             </section>
+          ) : null}
+
+          {phase === 'password' ? (
+            <PasswordPrison
+              onSentence={(outcome) =>
+                setPunishmentSentence(
+                  outcome === 'solved'
+                    ? 'Password Prison (Escaped with Samosa13!)'
+                    : 'Password Prison (Surrendered Credentials)',
+                )
+              }
+              onAppeal={triggerAppeal}
+            />
           ) : null}
 
           {/* Phase 8: The Final Twist (Appeal Denied!) */}

@@ -11,6 +11,7 @@ const ESCAPE_OFFSETS = [
   { x: 54, y: -18 },
   { x: -48, y: 22 },
 ] as const;
+const ESCAPE_TAUNTS = ['Too slow. I have moved departments.', 'Fine. The exit gives up.'] as const;
 
 export function EmergencyEscape({ beat, onEscape }: EmergencyEscapeProps) {
   const [evasions, setEvasions] = useState(0);
@@ -51,7 +52,7 @@ export function EmergencyEscape({ beat, onEscape }: EmergencyEscapeProps) {
           className="inline-flex min-h-11 items-center gap-2 rounded-full bg-amber-300 px-5 py-3 text-sm font-black text-slate-950 shadow-lg transition-transform duration-200 focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-amber-200"
         >
           <DoorOpen aria-hidden="true" size={18} />
-          {evasions >= ESCAPE_OFFSETS.length ? 'Fine. The exit gives up.' : beat.actionLabel}
+          {evasions === 0 ? beat.actionLabel : ESCAPE_TAUNTS[evasions - 1]}
         </button>
       </div>
       <p className="mt-2 text-center text-[11px] text-slate-500">

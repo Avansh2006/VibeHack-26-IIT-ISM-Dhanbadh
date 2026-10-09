@@ -95,8 +95,8 @@ try {
         await click('File an appeal');
         await click('button looked emotionally available');
         await click('lawyer who understands CSS');
-        await click('Weather is not admissible evidence');
-        await click('Test structural integrity');
+        await click('A samosa wearing glasses');
+        await click('Skip impossible CAPTCHA');
         await click('Decline pixel demands');
         await click('PROVE MY INNOCENCE');
         await pause(${screenshotPath ? '3000' : '1400'});
@@ -105,7 +105,7 @@ try {
         if (${reducedMotion}) await click('Mute court');
         await click('Face the extremely online judge');
         const storyPhases = [];
-        const storyDeadline = Date.now() + 60000;
+        const storyDeadline = Date.now() + 180000;
         let newsSkipped = false;
         while (Date.now() < storyDeadline) {
           const root = document.querySelector('[data-story-phase]');

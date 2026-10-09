@@ -17,7 +17,7 @@ import type { CourtroomSpeaker } from '@/audio';
 import type { DefenseId } from '@/components/courtroom/trialLogic';
 import type { InteractionRecord } from '@/shared/contracts';
 
-export type PunishmentType = 'mud' | 'spinner' | 'apology';
+export type PunishmentType = 'mud' | 'spinner' | 'apology' | 'password';
 
 export type TrialPhase =
   | 'summons'
@@ -41,6 +41,7 @@ export type TrialPhase =
   | 'mud'
   | 'spinner'
   | 'apology'
+  | 'password'
   | 'appeal'
   | 'certificate';
 
@@ -1778,6 +1779,7 @@ const CAMERA_SHOTS: Record<
   spinner: { position: [0, 2.5, 3.8], target: [0, 1.8, 0.5] },
   // Split perspective on confession microphone
   apology: { position: [1.6, 2.4, 3.8], target: [0, 1.6, 0.8] },
+  password: { position: [0, 2.7, 4.2], target: [0, 1.8, 0.8] },
   // Dramatic rapid push-in straight into the Judge's furious face!
   appeal: { position: [0, 3.6, -1.8], target: [0, 3.6, -5.1] },
   // Character close-ups

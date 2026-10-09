@@ -21,6 +21,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { ChaosBeat } from '@/engine/chaosBeats';
+import { CheckboxHydra } from '@/components/dashboard/CheckboxHydra';
 import {
   DASHBOARD_INTERACTIONS,
   type DashboardInteractionId,
@@ -563,6 +564,7 @@ export function ChaosDashboard({
           </div>
         </main>
       </div>
+      <CheckboxHydra active={clickCount >= 1 && clickCount <= 4} onInteraction={onInteraction} />
     </div>
   );
 }

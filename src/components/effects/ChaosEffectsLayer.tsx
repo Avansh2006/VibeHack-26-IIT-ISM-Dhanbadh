@@ -4,6 +4,7 @@ import { useReducedMotion } from 'motion/react';
 import type { ChaosBeat } from '@/engine';
 import type { ChaosStage, InteractionRecord, InteractionType } from '@/shared/contracts';
 import { CursorCriminal } from '@/components/effects/CursorCriminal';
+import { CaptchaHell } from '@/components/effects/CaptchaHell';
 import { EmergencyEscape } from '@/components/effects/EmergencyEscape';
 import { ProveInnocence } from '@/components/effects/ProveInnocence';
 
@@ -29,6 +30,7 @@ export function ChaosEffectsLayer({
   const isCursorCriminal = chaosStage !== 'pristine' && chaosStage !== 'courtroom';
   const showEscape = chaosStage === 'rebellious';
   const showInnocence = chaosStage === 'hostile' || chaosStage === 'meltdown';
+  const showCaptcha = clickCount === 9 || clickCount === 10;
   const particlePositions = useMemo(
     () =>
       PARTICLES.map((index) => ({
@@ -102,7 +104,7 @@ export function ChaosEffectsLayer({
           />
         ))}
 
-      {clickCount > 0 && !showEscape && !showInnocence && (
+      {clickCount > 0 && !showEscape && !showInnocence && !showCaptcha && (
         <div className="absolute left-1/2 top-5 w-[min(92vw,42rem)] -translate-x-1/2 rounded-2xl border border-white/15 bg-slate-950/88 px-5 py-4 text-center text-white shadow-2xl backdrop-blur-xl">
           <p className="text-[10px] font-black uppercase tracking-[0.24em] text-red-300">
             {beat.eyebrow}
@@ -125,7 +127,8 @@ export function ChaosEffectsLayer({
             onEscape={() => onAction('escape-attempt', beat.actionLabel)}
           />
         )}
-        {showInnocence && (
+        {showCaptcha ? <CaptchaHell onAnswer={onAction} /> : null}
+        {showInnocence && !showCaptcha && (
           <ProveInnocence
             beat={beat}
             clickCount={clickCount}
