@@ -8,7 +8,10 @@ export type CourtroomSpeaker =
   | 'clerk'
   | 'assistant'
   | 'anchor'
-  | 'girlfriend';
+  | 'girlfriend'
+  | 'jury'
+  | 'mouse'
+  | 'sponsor';
 
 export interface SpokenLine {
   speaker: CourtroomSpeaker;
@@ -31,6 +34,9 @@ const VOICE_HINTS: Readonly<Record<CourtroomSpeaker, readonly string[]>> = {
   assistant: ['aria', 'jenny', 'google uk english female', 'female'],
   anchor: ['guy', 'david', 'mark', 'google uk english male', 'male'],
   girlfriend: ['aria', 'jenny', 'samantha', 'google uk english female', 'female'],
+  jury: ['alex', 'fred', 'daniel', 'male'],
+  mouse: ['guy', 'david', 'mark', 'male'],
+  sponsor: ['zira', 'samantha', 'susan', 'female'],
 };
 
 const VOICE_SETTINGS: Readonly<Record<CourtroomSpeaker, { pitch: number; rate: number }>> = {
@@ -42,6 +48,9 @@ const VOICE_SETTINGS: Readonly<Record<CourtroomSpeaker, { pitch: number; rate: n
   assistant: { pitch: 1.32, rate: 1.06 },
   anchor: { pitch: 0.92, rate: 1.18 },
   girlfriend: { pitch: 1.22, rate: 1.02 },
+  jury: { pitch: 1.38, rate: 1.25 },
+  mouse: { pitch: 0.82, rate: 1.08 },
+  sponsor: { pitch: 1.42, rate: 1.34 },
 };
 
 function chooseVoice(voices: readonly SpeechSynthesisVoice[], speaker: CourtroomSpeaker) {

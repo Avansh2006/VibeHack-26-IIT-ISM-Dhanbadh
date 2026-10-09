@@ -71,8 +71,10 @@ try {
         const click = async (label, selector = 'button') => {
           const deadline = Date.now() + 60000;
           while (Date.now() < deadline) {
-            const candidate = [...document.querySelectorAll(selector)].find((element) =>
-              element.textContent?.replace(/\\s+/g, ' ').trim().includes(label),
+            const candidate = [...document.querySelectorAll(selector)].find(
+              (element) =>
+                !element.disabled &&
+                element.textContent?.replace(/\\s+/g, ' ').trim().includes(label),
             );
             if (candidate) {
               candidate.click();
@@ -119,7 +121,7 @@ try {
         const newsResult = document.querySelector('[data-news-result]')?.getAttribute('data-news-result');
         await click('Attempt a legally questionable defense');
         await click('I was framed by JavaScript');
-        await pause(1500);
+        await click('One samosa');
         await click('Issue my Digital Menace certificate');
         const certificateLink = document.querySelector('a[download]');
         return {

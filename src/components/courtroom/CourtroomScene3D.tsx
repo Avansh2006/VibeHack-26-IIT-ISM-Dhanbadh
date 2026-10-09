@@ -23,10 +23,20 @@ export type TrialPhase =
   | 'summons'
   | 'news'
   | 'witness'
+  | 'breakup'
   | 'evidence'
   | 'defense'
   | 'objection'
+  | 'jury'
+  | 'bribe'
+  | 'bribeResult'
+  | 'rage'
+  | 'mouse'
   | 'verdict'
+  | 'sponsor'
+  | 'plea'
+  | 'pleaResult'
+  | 'secret'
   | 'roulette'
   | 'mud'
   | 'spinner'
@@ -131,7 +141,7 @@ export default function CourtroomScene3D(props: CourtroomScene3DProps) {
       <pointLight position={[-7.2, 3.8, -1.8]} intensity={16} color="#ff8e7b" distance={8} />
       {/* Defense & Defendant rim */}
       <pointLight position={[5.4, 3.8, 1.6]} intensity={18} color="#7dd5ff" distance={8} />
-      {props.phase === 'witness' ? (
+      {props.phase === 'witness' || props.phase === 'breakup' ? (
         <spotLight
           castShadow
           position={[8.4, 8.5, 2.6]}
@@ -166,11 +176,12 @@ export default function CourtroomScene3D(props: CourtroomScene3DProps) {
         spinnerProgress={props.spinnerProgress ?? 0}
         reducedMotion={props.reducedMotion}
       />
-      {props.phase === 'witness' ? (
+      {props.phase === 'witness' || props.phase === 'breakup' ? (
         <WitnessModelBoundary
           fallback={
             <ProceduralGirlfriendWitness
               speaking={props.speaker === 'girlfriend'}
+              exiting={props.phase === 'breakup' && props.speaker === 'judge'}
               onReady={props.onWitnessReady}
             />
           }
@@ -179,6 +190,7 @@ export default function CourtroomScene3D(props: CourtroomScene3DProps) {
             <GirlfriendWitness
               speaking={props.speaker === 'girlfriend'}
               reducedMotion={props.reducedMotion}
+              exiting={props.phase === 'breakup' && props.speaker === 'judge'}
               onReady={props.onWitnessReady}
             />
           </Suspense>
@@ -188,6 +200,13 @@ export default function CourtroomScene3D(props: CourtroomScene3DProps) {
       {/* Evidence Holograms */}
       <EvidenceTable exhibits={props.exhibits} phase={props.phase} />
       <BreakingNewsScreen active={props.phase === 'news'} />
+      <BrowserTabJury phase={props.phase} reducedMotion={props.reducedMotion} />
+      <MouseWitness active={props.phase === 'mouse'} reducedMotion={props.reducedMotion} />
+      <SponsorBillboard active={props.phase === 'sponsor'} />
+      <JudgeRageEffects
+        active={props.phase === 'rage' || props.phase === 'secret'}
+        reducedMotion={props.reducedMotion}
+      />
 
       {/* Interactive Gavel */}
       <InteractiveGavel
@@ -601,7 +620,8 @@ function JudgeCharacter({
   useFrame(({ clock }) => {
     if (reducedMotion) return;
     const time = clock.getElapsedTime();
-    const isSpeaking = speaker === 'judge' || phase === 'verdict' || phase === 'appeal';
+    const raging = phase === 'rage' || phase === 'secret';
+    const isSpeaking = speaker === 'judge' || phase === 'verdict' || phase === 'appeal' || raging;
 
     if (head.current) {
       head.current.rotation.z =
@@ -612,11 +632,13 @@ function JudgeCharacter({
     }
     if (wig.current) {
       wig.current.rotation.z =
-        phase === 'appeal' ? Math.sin(time * 16) * 0.09 : Math.sin(time * 1.2) * 0.008;
-      wig.current.position.y = phase === 'appeal' ? Math.abs(Math.sin(time * 12)) * 0.06 : 0;
+        phase === 'appeal' || raging ? Math.sin(time * 16) * 0.09 : Math.sin(time * 1.2) * 0.008;
+      if (!raging) {
+        wig.current.position.y = phase === 'appeal' ? Math.abs(Math.sin(time * 12)) * 0.06 : 0;
+      }
     }
     if (arm.current) {
-      const pounding = phase === 'appeal' || phase === 'objection';
+      const pounding = phase === 'appeal' || phase === 'objection' || raging;
       arm.current.rotation.x = pounding
         ? Math.sin(time * 14) * 0.4 - 0.9
         : isSpeaking
@@ -638,6 +660,25 @@ function JudgeCharacter({
     });
     return () => context.revert();
   }, [phase]);
+
+  useLayoutEffect(() => {
+    if (!wig.current || (phase !== 'rage' && phase !== 'secret')) return;
+    const context = gsap.context(() => {
+      gsap.to(wig.current!.position, {
+        x: 3.8,
+        y: 4.8,
+        z: 1.5,
+        duration: reducedMotion ? 0 : 1.1,
+        ease: 'power4.out',
+      });
+      gsap.to(wig.current!.rotation, {
+        x: Math.PI * 2,
+        z: Math.PI * 3,
+        duration: reducedMotion ? 0 : 1.1,
+      });
+    });
+    return () => context.revert();
+  }, [phase, reducedMotion]);
 
   return (
     <group ref={character} position={[0, 2.5, -5.1]}>
@@ -1010,10 +1051,12 @@ class WitnessModelBoundary extends Component<
 function GirlfriendWitness({
   speaking,
   reducedMotion,
+  exiting,
   onReady,
 }: {
   speaking: boolean;
   reducedMotion: boolean;
+  exiting: boolean;
   onReady(this: void): void;
 }) {
   const entrance = useRef<Group>(null);
@@ -1082,6 +1125,24 @@ function GirlfriendWitness({
     return () => context.revert();
   }, [reducedMotion]);
 
+  useLayoutEffect(() => {
+    if (!entrance.current || !exiting) return;
+    const context = gsap.context(() => {
+      gsap.to(entrance.current!.position, {
+        x: 12.5,
+        z: 3.5,
+        duration: reducedMotion ? 0 : 1.05,
+        ease: 'power3.in',
+      });
+      gsap.to(entrance.current!.rotation, {
+        y: -1.5,
+        duration: reducedMotion ? 0 : 0.55,
+        ease: 'power2.inOut',
+      });
+    });
+    return () => context.revert();
+  }, [exiting, reducedMotion]);
+
   useFrame(({ clock }) => {
     const time = clock.getElapsedTime();
     const mouth = speaking ? 0.16 + Math.abs(Math.sin(time * 11)) * 0.62 : 0;
@@ -1117,13 +1178,19 @@ function GirlfriendWitness({
 
 function ProceduralGirlfriendWitness({
   speaking,
+  exiting,
   onReady,
 }: {
   speaking: boolean;
+  exiting: boolean;
   onReady(this: void): void;
 }) {
   const group = useRef<Group>(null);
   useEffect(onReady, [onReady]);
+  useLayoutEffect(() => {
+    if (!group.current || !exiting) return;
+    gsap.to(group.current.position, { x: 12.5, z: 3.5, duration: 0.8 });
+  }, [exiting]);
   useFrame(({ clock }) => {
     if (!group.current) return;
     group.current.rotation.z = speaking ? Math.sin(clock.getElapsedTime() * 6) * 0.045 : 0;
@@ -1169,6 +1236,132 @@ function BreakingNewsScreen({ active }: { active: boolean }) {
         <meshStandardMaterial color="#e2283f" emissive="#b10d24" emissiveIntensity={1.5} />
       </mesh>
       <pointLight position={[0, 0, 3]} intensity={24} color="#ff7b83" distance={10} />
+    </group>
+  );
+}
+
+function BrowserTabJury({ phase, reducedMotion }: { phase: TrialPhase; reducedMotion: boolean }) {
+  const active = ['jury', 'bribe', 'bribeResult', 'rage'].includes(phase);
+  if (!active) return null;
+  return (
+    <group position={[7.9, 1.15, 0.5]}>
+      {Array.from({ length: 6 }, (_, index) => (
+        <BrowserJuror
+          key={index}
+          index={index}
+          crashed={index === 4 && phase !== 'bribe' && phase !== 'bribeResult'}
+          panicking={phase === 'rage'}
+          reducedMotion={reducedMotion}
+        />
+      ))}
+    </group>
+  );
+}
+
+function BrowserJuror({
+  index,
+  crashed,
+  panicking,
+  reducedMotion,
+}: {
+  index: number;
+  crashed: boolean;
+  panicking: boolean;
+  reducedMotion: boolean;
+}) {
+  const juror = useRef<Group>(null);
+  useFrame(({ clock }) => {
+    if (!juror.current || reducedMotion) return;
+    const time = clock.getElapsedTime();
+    juror.current.rotation.z = crashed
+      ? -Math.PI / 2
+      : Math.sin(time * (panicking ? 14 : 5) + index) * (panicking ? 0.22 : 0.06);
+    juror.current.position.y = crashed ? -0.7 : Math.abs(Math.sin(time * 4 + index)) * 0.18;
+  });
+  const x = (index % 2) * 1.35;
+  const z = Math.floor(index / 2) * 1.35;
+  return (
+    <group ref={juror} position={[x, 0, z]}>
+      <RoundedBox args={[1.05, 1.35, 0.12]} radius={0.09} smoothness={3}>
+        <meshStandardMaterial
+          color={crashed ? '#3d3d46' : index % 2 ? '#5f71ff' : '#cd3150'}
+          emissive={crashed ? '#111116' : index % 2 ? '#2334ac' : '#7a1028'}
+          emissiveIntensity={0.45}
+        />
+      </RoundedBox>
+      <mesh position={[0, 0.43, 0.08]}>
+        <boxGeometry args={[0.82, 0.13, 0.025]} />
+        <meshStandardMaterial color="#eceeff" />
+      </mesh>
+      <mesh position={[0, -0.12, 0.08]}>
+        <planeGeometry args={[0.72, 0.52]} />
+        <meshStandardMaterial color={crashed ? '#0b0b0d' : '#f7edd6'} />
+      </mesh>
+    </group>
+  );
+}
+
+function MouseWitness({ active, reducedMotion }: { active: boolean; reducedMotion: boolean }) {
+  const mouse = useRef<Group>(null);
+  useFrame(({ clock }) => {
+    if (!mouse.current || reducedMotion) return;
+    const time = clock.getElapsedTime();
+    mouse.current.rotation.y = Math.sin(time * 3.2) * 0.12;
+    mouse.current.position.y = 0.25 + Math.abs(Math.sin(time * 5)) * 0.12;
+  });
+  if (!active) return null;
+  return (
+    <group ref={mouse} position={[0, 0.25, 0.65]} rotation={[0, -0.12, 0]}>
+      <mesh castShadow position={[0, 1.35, 0]} scale={[1.15, 1.5, 1.7]}>
+        <sphereGeometry args={[0.95, 28, 20]} />
+        <meshStandardMaterial color="#d9d9df" roughness={0.32} metalness={0.08} />
+      </mesh>
+      <mesh position={[0, 2.15, 0.76]} rotation={[0.15, 0, 0]}>
+        <boxGeometry args={[0.09, 1.2, 0.08]} />
+        <meshStandardMaterial color="#26262c" roughness={0.45} />
+      </mesh>
+      <mesh position={[0, 1.23, 1.52]}>
+        <sphereGeometry args={[0.28, 16, 12]} />
+        <meshStandardMaterial color="#ff5b71" emissive="#8b1324" emissiveIntensity={0.6} />
+      </mesh>
+      {[-0.36, 0.36].map((x) => (
+        <mesh key={x} position={[x, 1.72, 1.5]}>
+          <sphereGeometry args={[0.12, 12, 10]} />
+          <meshStandardMaterial color="#121216" />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function SponsorBillboard({ active }: { active: boolean }) {
+  if (!active) return null;
+  return (
+    <group position={[0, 3.7, -3]}>
+      <RoundedBox args={[8.5, 3.5, 0.2]} radius={0.2} smoothness={4}>
+        <meshStandardMaterial color="#42156f" emissive="#9b33e5" emissiveIntensity={0.8} />
+      </RoundedBox>
+      <mesh position={[0, 0, 0.14]}>
+        <torusGeometry args={[1.05, 0.28, 16, 36]} />
+        <meshStandardMaterial color="#ffd43b" emissive="#e86619" emissiveIntensity={1.5} />
+      </mesh>
+      <Sparkles count={38} scale={[8, 3, 1]} size={2.2} speed={0.8} color="#fff0a8" />
+    </group>
+  );
+}
+
+function JudgeRageEffects({ active, reducedMotion }: { active: boolean; reducedMotion: boolean }) {
+  if (!active) return null;
+  return (
+    <group>
+      <Sparkles
+        count={reducedMotion ? 12 : 90}
+        scale={[11, 7, 9]}
+        size={4}
+        speed={2}
+        color="#ff334f"
+      />
+      <pointLight position={[0, 5, -3]} intensity={55} distance={14} color="#ff233f" />
     </group>
   );
 }
@@ -1561,12 +1754,22 @@ const CAMERA_SHOTS: Record<
   summons: { position: [0, 3.2, 9.8], target: [0, 2.6, -4.8] },
   news: { position: [0, 4.1, 1.2], target: [0, 4.1, -8.05] },
   witness: { position: [5.45, 2.55, 0.45], target: [7.2, 1.95, -2.05] },
+  breakup: { position: [5.45, 2.55, 0.45], target: [7.2, 2.05, -2.05] },
   evidence: { position: [4.8, 3.1, 7.2], target: [0, 1.7, 1.1] },
   defense: { position: [2.2, 2.6, 5.8], target: [2.8, 1.8, 2.4] },
   // Dramatic whip pan Dutch angle on prosecutor shouting OBJECTION!
   objection: { position: [-3.8, 2.6, 3.2], target: [-5.8, 2.2, -0.7] },
+  jury: { position: [3.8, 3.1, 5.6], target: [8.2, 1.7, 1.9] },
+  bribe: { position: [0, 3.4, 1.4], target: [0, 3.45, -5.1] },
+  bribeResult: { position: [0, 3.4, 0.8], target: [0, 3.45, -5.1] },
+  rage: { position: [0, 3.55, -0.35], target: [0, 3.55, -5.1] },
+  mouse: { position: [2.9, 2.65, 5], target: [0, 1.65, 0.7] },
   // Low angle looking up at the towering Judge
   verdict: { position: [0, 2.9, 1.8], target: [0, 3.4, -5.1] },
+  sponsor: { position: [0, 3.7, 3.2], target: [0, 3.7, -3] },
+  plea: { position: [1.5, 3, 4.7], target: [0, 2.2, -2.3] },
+  pleaResult: { position: [0, 3.25, 1.5], target: [0, 3.45, -5.1] },
+  secret: { position: [0, 3.6, -1.3], target: [0, 3.6, -5.1] },
   // Front angle focused on the sentence wheel
   roulette: { position: [0, 3.8, 5.2], target: [0, 1.8, 0.8] },
   // Tracking shot of defendant front roll into the mud puddle
@@ -1597,6 +1800,9 @@ const SPEAKER_CAMERA_SHOTS: Readonly<Partial<Record<CourtroomSpeaker, string>>> 
   clerk: 'clerk',
   anchor: 'anchor',
   girlfriend: 'girlfriend',
+  jury: 'jury',
+  mouse: 'mouse',
+  sponsor: 'sponsor',
 };
 
 const DEFAULT_CAMERA_SHOT = { position: [0, 3.2, 9.8], target: [0, 2.6, -4.8] } as const;
@@ -1618,7 +1824,7 @@ function CameraDirector({
 
   useLayoutEffect(() => {
     const context = gsap.context(() => {
-      const isAppeal = phase === 'appeal';
+      const isAppeal = phase === 'appeal' || phase === 'rage' || phase === 'secret';
       const duration = reducedMotion
         ? 0
         : isAppeal
@@ -1648,6 +1854,10 @@ function CameraDirector({
     return () => context.revert();
   }, [camera, phase, reducedMotion, shot, speaker]);
 
-  useFrame(() => camera.lookAt(focus.current.x, focus.current.y, focus.current.z));
+  useFrame(({ clock }) => {
+    const shaking = phase === 'rage' || phase === 'secret';
+    const shake = shaking && !reducedMotion ? Math.sin(clock.getElapsedTime() * 38) * 0.055 : 0;
+    camera.lookAt(focus.current.x + shake, focus.current.y - shake * 0.5, focus.current.z);
+  });
   return null;
 }

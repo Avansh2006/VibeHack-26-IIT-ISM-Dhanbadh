@@ -416,6 +416,87 @@
   letter-spacing: 0.18em;
   text-transform: uppercase;
 }
+.court-chaos-console {
+  align-self: center;
+  justify-self: center;
+  width: min(900px, 100%);
+  border: 1px solid rgba(242, 201, 111, 0.38);
+  padding: 1.2rem 1.4rem;
+  background: linear-gradient(135deg, rgba(27, 11, 22, 0.94), rgba(7, 7, 11, 0.88));
+  box-shadow: 0 2rem 6rem rgba(0, 0, 0, 0.68);
+  text-align: center;
+  backdrop-filter: blur(15px);
+  pointer-events: auto;
+  animation: court-rise 0.55s both cubic-bezier(0.16, 1, 0.3, 1);
+}
+.court-chaos-console > p {
+  margin: 0;
+  color: #f2c96f;
+  font-size: 0.62rem;
+  font-weight: 950;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.court-chaos-console h2 {
+  margin: 0.35rem 0;
+  font:
+    950 clamp(2rem, 6vw, 4.8rem)/0.9 Georgia,
+    serif;
+  letter-spacing: -0.05em;
+}
+.court-chaos-console > strong {
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 0.82rem;
+}
+.court-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+.court-choice-grid button {
+  min-height: 7.4rem;
+  border: 1px solid rgba(242, 201, 111, 0.26);
+  border-radius: 0.6rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.045);
+  color: #fff4df;
+  cursor: pointer;
+}
+.court-choice-grid button:hover {
+  border-color: #f2c96f;
+  background: rgba(242, 201, 111, 0.13);
+  transform: translateY(-4px);
+}
+.court-choice-grid strong,
+.court-choice-grid small {
+  display: block;
+}
+.court-choice-grid strong {
+  font:
+    900 1.15rem/1.1 Georgia,
+    serif;
+}
+.court-choice-grid small {
+  margin-top: 0.8rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+.court-plea-grid {
+  grid-template-columns: repeat(2, 1fr);
+}
+.court-rage-console {
+  border-color: #ff304f;
+  background: linear-gradient(135deg, rgba(94, 5, 20, 0.9), rgba(17, 3, 8, 0.92));
+  box-shadow: 0 0 6rem rgba(255, 30, 63, 0.28);
+}
+.court-rage-console h2 {
+  color: #ff4561;
+  text-shadow: 0 0 2rem rgba(255, 20, 55, 0.55);
+}
+.court-sponsor-console {
+  border-color: #d76cff;
+  background: linear-gradient(135deg, rgba(70, 14, 104, 0.92), rgba(20, 5, 36, 0.9));
+}
 
 /* Punishment Roulette Console */
 .court-roulette-console,
@@ -751,6 +832,14 @@
   }
 }
 @media (max-width: 760px) {
+  .court-choice-grid,
+  .court-plea-grid {
+    grid-template-columns: 1fr;
+    gap: 0.45rem;
+  }
+  .court-choice-grid button {
+    min-height: 4.8rem;
+  }
   .court-news-layer {
     inset: 5rem 0.5rem 10.8rem;
   }

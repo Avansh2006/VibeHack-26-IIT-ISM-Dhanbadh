@@ -32,10 +32,20 @@ const PHASE_LABELS: Readonly<Record<TrialPhase, string>> = {
   summons: 'Court convening',
   news: 'Breaking News interruption',
   witness: 'Surprise witness',
+  breakup: 'Relationship rollback',
   evidence: 'Exhibits entered',
   defense: 'Questionable defense',
   objection: 'Prosecutorial yelling',
+  jury: 'Browser-tab jury',
+  bribe: 'Highly ethical negotiation',
+  bribeResult: 'Bribe entered into evidence',
+  rage: 'Judicial rage mode',
+  mouse: 'Mouse witness',
   verdict: 'Judgment rendered',
+  sponsor: 'Contractually suspicious ad',
+  plea: 'Impossible plea bargain',
+  pleaResult: 'Plea regretted instantly',
+  secret: 'Final judicial meltdown',
   roulette: 'Punishment roulette',
   mud: 'Mud of Shame',
   spinner: 'Human loading spinner',
@@ -53,7 +63,13 @@ const SPEAKER_LABELS: Readonly<Record<CourtroomSpeaker, string>> = {
   assistant: 'Counsel Error 404',
   anchor: 'Channel 13 Emergency Desk',
   girlfriend: 'The Localhost Girlfriend',
+  jury: 'The Browser-Tab Jury',
+  mouse: 'Mr. Logitech, Hostile Witness',
+  sponsor: 'Definitely Real Sponsor Voice',
 };
+
+type BribeChoice = 'cash' | 'samosa' | 'star';
+type PleaChoice = 'buffering' | 'ad';
 
 const PUNISHMENTS: Readonly<
   Record<PunishmentType, { title: string; subtitle: string; description: string; angle: number }>
@@ -132,6 +148,9 @@ export function CourtroomExperience({
     'pending',
   );
   const [witnessReady, setWitnessReady] = useState(false);
+  const [bribeChoice, setBribeChoice] = useState<BribeChoice | null>(null);
+  const [pleaChoice, setPleaChoice] = useState<PleaChoice | null>(null);
+  const [innocenceClaims, setInnocenceClaims] = useState(0);
   const [appealReveal, setAppealReveal] = useState(false);
 
   // Punishment roulette & mini-game state
@@ -298,7 +317,7 @@ export function CourtroomExperience({
     if (['summons', 'news', 'witness', 'certificate'].includes(phase)) return;
     const generation = directorGeneration.current + 1;
     directorGeneration.current = generation;
-    const lines = dialogueForPhase(phase, verdict?.title);
+    const lines = dialogueForPhase(phase, verdict?.title, bribeChoice, pleaChoice);
     const perform = async () => {
       for (const line of lines) {
         if (directorGeneration.current !== generation) return;
@@ -306,9 +325,30 @@ export function CourtroomExperience({
       }
       if (directorGeneration.current !== generation) return;
       setActiveLine(null);
-      if (phase === 'objection') {
+      if (phase === 'breakup') {
+        setPhase('evidence');
+      } else if (phase === 'objection') {
         setGavelPulse((value) => value + 1);
+        playCue('objection');
+        setPhase('jury');
+      } else if (phase === 'jury') {
+        playCue('buzzer');
+        setPhase('bribe');
+      } else if (phase === 'bribeResult') {
+        setGavelPulse((value) => value + 1);
+        setPhase('rage');
+      } else if (phase === 'rage') {
+        playCue('gavel');
+        setPhase('mouse');
+      } else if (phase === 'mouse') {
         playCue('verdict');
+        setPhase('verdict');
+      } else if (phase === 'sponsor') {
+        setPhase('plea');
+      } else if (phase === 'pleaResult') {
+        setPhase('roulette');
+      } else if (phase === 'secret') {
+        setInnocenceClaims(0);
         setPhase('verdict');
       } else if (phase === 'appeal') {
         setAppealReveal(true);
@@ -318,7 +358,7 @@ export function CourtroomExperience({
     };
     void perform();
     return cancelDirector;
-  }, [cancelDirector, phase, playCue, verdict?.title, waitForSpeech]);
+  }, [bribeChoice, cancelDirector, phase, playCue, pleaChoice, verdict?.title, waitForSpeech]);
 
   const skipDialogue = () => {
     if (phase === 'news') setNewsResult('skipped');
@@ -409,7 +449,7 @@ export function CourtroomExperience({
     if (!isCurrent()) return;
     setActiveLine(null);
     strikeGavel();
-    setPhase('evidence');
+    setPhase('breakup');
   };
 
   const chooseDefense = (defense: DefenseId) => {
@@ -417,6 +457,30 @@ export function CourtroomExperience({
     setPhase('objection');
     setGavelPulse((value) => value + 1);
     playCue('objection');
+  };
+
+  const chooseBribe = (choice: BribeChoice) => {
+    setBribeChoice(choice);
+    if (choice === 'samosa') {
+      setPunishmentSentence('DOUBLE SENTENCE: Samosa-Based Judicial Corruption');
+    }
+    setPhase('bribeResult');
+  };
+
+  const choosePlea = (choice: PleaChoice) => {
+    setPleaChoice(choice);
+    if (choice === 'buffering') {
+      setSelectedPunishment('spinner');
+      setPunishmentSentence(
+        `${bribeChoice === 'samosa' ? 'DOUBLE SENTENCE: ' : ''}404 Years of Human Buffering`,
+      );
+    } else {
+      setSelectedPunishment('apology');
+      setPunishmentSentence(
+        `${bribeChoice === 'samosa' ? 'DOUBLE SENTENCE: ' : ''}One Unskippable Ad Every Time You Blink`,
+      );
+    }
+    setPhase('pleaResult');
   };
 
   // Roulette Spin Animation
@@ -604,10 +668,18 @@ export function CourtroomExperience({
             </section>
           ) : null}
 
-          {phase === 'witness' ? (
+          {phase === 'witness' || phase === 'breakup' ? (
             <section className="court-witness-caption" aria-label="Surprise witness testimony">
-              <span>SURPRISE WITNESS · CONNECTION: LOCALHOST</span>
-              <strong>Relationship status: uncommitted changes</strong>
+              <span>
+                {phase === 'breakup'
+                  ? 'BREAKUP DEPLOYMENT · STATUS: IRREVERSIBLE'
+                  : 'SURPRISE WITNESS · CONNECTION: LOCALHOST'}
+              </span>
+              <strong>
+                {phase === 'breakup'
+                  ? 'Relationship moved to production without you'
+                  : 'Relationship status: uncommitted changes'}
+              </strong>
               <small>
                 Exhibit confirms {summary.totalClicks} clicks, {summary.cursorIncidents} suspicious
                 cursor incidents and {summary.escapeAttempts} escape attempts.
@@ -639,6 +711,57 @@ export function CourtroomExperience({
             </section>
           ) : null}
 
+          {phase === 'jury' ? (
+            <section className="court-chaos-console court-jury-console">
+              <p>Six tabs deliberating · 4.7 GB memory consumed</p>
+              <h2>THE BROWSER JURY HAS A VERDICT</h2>
+              <strong>One dissenting tab has stopped responding.</strong>
+            </section>
+          ) : null}
+
+          {phase === 'bribe' ? (
+            <section className="court-chaos-console" aria-labelledby="bribe-title">
+              <p>Absolutely not a bribery menu</p>
+              <h2 id="bribe-title">Influence the judge</h2>
+              <div className="court-choice-grid">
+                <button type="button" onClick={() => chooseBribe('cash')}>
+                  <strong>₹10</strong>
+                  <small>Enough for 0.04% of a judicial chai</small>
+                </button>
+                <button type="button" onClick={() => chooseBribe('samosa')}>
+                  <strong>One samosa</strong>
+                  <small>Flaky, warm and constitutionally suspicious</small>
+                </button>
+                <button type="button" onClick={() => chooseBribe('star')}>
+                  <strong>GitHub star</strong>
+                  <small>Public validation with no monetary value</small>
+                </button>
+              </div>
+            </section>
+          ) : null}
+
+          {phase === 'bribeResult' || phase === 'rage' ? (
+            <section className="court-chaos-console court-rage-console">
+              <p>
+                {phase === 'rage' ? 'JUDICIAL TEMPERATURE: 404°C' : 'Ethics server unavailable'}
+              </p>
+              <h2>{phase === 'rage' ? 'JUDGE RAGE MODE' : 'BRIBE PROCESSED'}</h2>
+              <strong>
+                {bribeChoice === 'samosa'
+                  ? 'The samosa was accepted. Your sentence was doubled.'
+                  : 'Your influence attempt has been screenshotted.'}
+              </strong>
+            </section>
+          ) : null}
+
+          {phase === 'mouse' ? (
+            <section className="court-chaos-console court-mouse-console">
+              <p>Hostile peripheral witness</p>
+              <h2>THE MOUSE TESTIFIES</h2>
+              <strong>Claiming repetitive-click trauma and unpaid overtime.</strong>
+            </section>
+          ) : null}
+
           {/* Phase 5: Verdict */}
           {phase === 'verdict' && verdict ? (
             <section className="court-verdict">
@@ -655,10 +778,29 @@ export function CourtroomExperience({
                   className="court-primary"
                   onClick={() => {
                     strikeGavel();
-                    setPhase('roulette');
+                    setPhase('sponsor');
                   }}
                 >
-                  Spin the Punishment Roulette <ArrowRight aria-hidden="true" size={18} />
+                  Begin absurd sentencing <ArrowRight aria-hidden="true" size={18} />
+                </button>
+                <button
+                  type="button"
+                  className="court-control"
+                  disabled={voices.speaking}
+                  onClick={() => {
+                    const next = innocenceClaims + 1;
+                    setInnocenceClaims(next);
+                    if (next >= 3) setPhase('secret');
+                    else {
+                      const line: SpokenLine = {
+                        speaker: 'judge',
+                        text: next === 1 ? 'Denied.' : 'Still denied. Stop refreshing innocence.',
+                      };
+                      setActiveLine(line);
+                    }
+                  }}
+                >
+                  I'm innocent{innocenceClaims ? ` (${innocenceClaims}/3 ignored)` : ''}
                 </button>
                 <button
                   type="button"
@@ -671,6 +813,45 @@ export function CourtroomExperience({
                   Issue my Digital Menace certificate
                 </button>
               </div>
+            </section>
+          ) : null}
+
+          {phase === 'sponsor' ? (
+            <section className="court-chaos-console court-sponsor-console">
+              <p>UNSKIPPABLE SPONSOR MESSAGE · probably legal</p>
+              <h2>CTRL ALT DECEIT™</h2>
+              <strong>Accountability deleted in three convenient keystrokes.</strong>
+            </section>
+          ) : null}
+
+          {phase === 'plea' ? (
+            <section className="court-chaos-console" aria-labelledby="plea-title">
+              <p>The plea bargain nobody requested</p>
+              <h2 id="plea-title">Choose your inconvenience</h2>
+              <div className="court-choice-grid court-plea-grid">
+                <button type="button" onClick={() => choosePlea('buffering')}>
+                  <strong>404 years buffering</strong>
+                  <small>Release date: NaN</small>
+                </button>
+                <button type="button" onClick={() => choosePlea('ad')}>
+                  <strong>An ad every blink</strong>
+                  <small>Premium eyelids sold separately</small>
+                </button>
+              </div>
+            </section>
+          ) : null}
+
+          {phase === 'pleaResult' || phase === 'secret' ? (
+            <section className="court-chaos-console court-rage-console">
+              <p>{phase === 'secret' ? 'SECRET ENDING UNLOCKED' : 'Plea accepted by mistake'}</p>
+              <h2>{phase === 'secret' ? 'FINAL MELTDOWN' : 'NO REFUNDS'}</h2>
+              <strong>
+                {phase === 'secret'
+                  ? 'The judge has rate-limited innocence.'
+                  : pleaChoice === 'buffering'
+                    ? 'Your freedom is loading at zero percent.'
+                    : 'Blink responsibly. This message was an ad.'}
+              </strong>
             </section>
           ) : null}
 
@@ -899,7 +1080,12 @@ export function CourtroomExperience({
   );
 }
 
-function dialogueForPhase(phase: TrialPhase, verdictTitle?: string): readonly SpokenLine[] {
+function dialogueForPhase(
+  phase: TrialPhase,
+  verdictTitle?: string,
+  bribeChoice?: BribeChoice | null,
+  pleaChoice?: PleaChoice | null,
+): readonly SpokenLine[] {
   if (phase === 'summons' || phase === 'news') return [];
   if (phase === 'witness')
     return [
@@ -914,6 +1100,17 @@ function dialogueForPhase(phase: TrialPhase, verdictTitle?: string): readonly Sp
         text: "He promised me forever but couldn't even commit to one browser tab!",
       },
       { speaker: 'judge', text: "OBJECTION! That's actually devastating." },
+    ];
+  if (phase === 'breakup')
+    return [
+      {
+        speaker: 'girlfriend',
+        text: "And one more thing. I'm leaving you. Even your GitHub has more commitment.",
+      },
+      {
+        speaker: 'judge',
+        text: 'Let the record show: relationship status changed to detached HEAD.',
+      },
     ];
   if (phase === 'evidence')
     return [
@@ -942,6 +1139,50 @@ function dialogueForPhase(phase: TrialPhase, verdictTitle?: string): readonly Sp
       },
       { speaker: 'judge', text: 'Sustained! The rectangle has a cleaner record than you.' },
     ];
+  if (phase === 'jury')
+    return [
+      { speaker: 'jury', text: 'GUILTY! GUILTY! GUILTY! GUILTY in six open tabs!' },
+      {
+        speaker: 'jury',
+        text: 'Tab seven votes innocent. Tab seven has crashed. Also, your attendance is seventy-five percent in a class that does not exist at IIT ISM.',
+      },
+    ];
+  if (phase === 'bribe')
+    return [
+      {
+        speaker: 'judge',
+        text: 'The court does not accept bribes. The court does, however, review tasteful gifts.',
+      },
+    ];
+  if (phase === 'bribeResult') {
+    if (bribeChoice === 'samosa')
+      return [
+        { speaker: 'judge', text: 'Samosa accepted. Excellent crust. Sentence doubled.' },
+        { speaker: 'prosecutor', text: 'Your Honor just deep-fried due process.' },
+      ];
+    if (bribeChoice === 'star')
+      return [
+        { speaker: 'judge', text: 'A GitHub star? I only accept forks with no merge conflicts.' },
+        { speaker: 'prosecutor', text: 'Bribery attempt rejected for insufficient engagement.' },
+      ];
+    return [
+      { speaker: 'judge', text: 'Ten rupees? That barely covers one judicial chai pixel.' },
+      { speaker: 'prosecutor', text: 'Adding one count of budget corruption.' },
+    ];
+  }
+  if (phase === 'rage')
+    return [
+      { speaker: 'judge', text: 'ENOUGH! My wig has rage-quit before I could!' },
+      { speaker: 'jury', text: 'The tabs are panicking! Somebody restore the previous session!' },
+    ];
+  if (phase === 'mouse')
+    return [
+      {
+        speaker: 'mouse',
+        text: 'I am the mouse. He clicked me thirteen times without so much as a coffee break.',
+      },
+      { speaker: 'judge', text: 'Powerful testimony. Give that mouse a ergonomic pension.' },
+    ];
   if (phase === 'verdict')
     return [
       {
@@ -951,6 +1192,43 @@ function dialogueForPhase(phase: TrialPhase, verdictTitle?: string): readonly Sp
       {
         speaker: 'clerk',
         text: 'Guilty verdict logged. Prepare the punishment roulette wheel.',
+      },
+    ];
+  if (phase === 'sponsor')
+    return [
+      {
+        speaker: 'sponsor',
+        text: 'This guilty verdict is sponsored by Ctrl Alt Deceit, the keyboard shortcut for avoiding accountability!',
+      },
+      { speaker: 'judge', text: 'I hate that this court has ad-supported justice.' },
+    ];
+  if (phase === 'plea')
+    return [
+      {
+        speaker: 'judge',
+        text: 'Choose your plea bargain: four hundred four years of buffering, or one unskippable ad every time you blink.',
+      },
+    ];
+  if (phase === 'pleaResult')
+    return pleaChoice === 'buffering'
+      ? [
+          {
+            speaker: 'judge',
+            text: 'Buffering selected. Your release date is currently loading at zero percent.',
+          },
+        ]
+      : [
+          {
+            speaker: 'sponsor',
+            text: 'Ad sentence selected. Blinking now requires accepting all cookies.',
+          },
+        ];
+  if (phase === 'secret')
+    return [
+      { speaker: 'defendant', text: "I'm innocent! I'm innocent! I'm innocent!" },
+      {
+        speaker: 'judge',
+        text: 'FINAL MELTDOWN! Innocence has been rate-limited. Bailiff, uninstall the defendant!',
       },
     ];
   if (phase === 'roulette')

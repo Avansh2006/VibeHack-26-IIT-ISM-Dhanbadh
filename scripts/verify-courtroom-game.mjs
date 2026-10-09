@@ -8,6 +8,9 @@ import path from 'node:path';
 const previewUrl = process.env.CLICKPOCALYPSE_PREVIEW_URL ?? 'http://127.0.0.1:4173';
 const screenshotDir = process.env.CLICKPOCALYPSE_SCREENSHOT_DIR;
 const witnessScreenshotPath = process.env.CLICKPOCALYPSE_WITNESS_SCREENSHOT;
+const sceneScreenshotPath = process.env.CLICKPOCALYPSE_SCENE_SCREENSHOT;
+const fastMode = process.env.CLICKPOCALYPSE_FAST === '1';
+const mobileViewport = process.env.CLICKPOCALYPSE_MOBILE === '1';
 
 const browserCandidates = [
   process.env.CHROME_PATH,
@@ -30,7 +33,8 @@ const browserArguments = [
   '--remote-allow-origins=*',
   `--remote-debugging-port=${port}`,
   `--user-data-dir=${profileDirectory}`,
-  '--window-size=1440,900',
+  `--window-size=${mobileViewport ? '390,844' : '1440,900'}`,
+  ...(fastMode ? ['--force-prefers-reduced-motion'] : []),
   previewUrl,
 ];
 
@@ -60,8 +64,10 @@ try {
         const click = async (label, selector = 'button') => {
           const deadline = Date.now() + 60000;
           while (Date.now() < deadline) {
-            const candidate = [...document.querySelectorAll(selector)].find((element) =>
-              element.textContent?.replace(/\\s+/g, ' ').trim().includes(label),
+            const candidate = [...document.querySelectorAll(selector)].find(
+              (element) =>
+                !element.disabled &&
+                element.textContent?.replace(/\\s+/g, ' ').trim().includes(label),
             );
             if (candidate) {
               candidate.click();
@@ -90,6 +96,7 @@ try {
         await pause(1600);
 
         // Courtroom stages
+        if (${fastMode}) await click('Mute court');
         await click('Face the extremely online judge');
         const openingSteps = [];
         const openingDeadline = Date.now() + 20000;
@@ -135,11 +142,28 @@ try {
           ?.getAttribute('data-news-result');
         await click('Attempt a legally questionable defense');
         await click('I was framed by JavaScript');
-        await pause(2500); // Wait for objection -> verdict
+        if (${Boolean(process.env.CLICKPOCALYPSE_SCENE_SCREENSHOT)}) {
+          const captureDeadline = Date.now() + 60000;
+          while (Date.now() < captureDeadline) {
+            const root = document.querySelector('[data-story-phase]');
+            if (root?.getAttribute('data-story-phase') === 'bribe') {
+              await pause(300);
+              return { sceneCaptureReady: true, capturedPhase: 'bribe' };
+            }
+            await pause(40);
+          }
+          throw new Error('Bribe scene did not become ready for capture.');
+        }
+        await click('One samosa');
+        await click("I'm innocent");
+        await click("I'm innocent");
+        await click("I'm innocent");
+        await click('Begin absurd sentencing');
+        await click('404 years buffering');
 
         // Enter Punishment Roulette
-        await click('Spin the Punishment Roulette');
         await pause(500);
+        await click('Mud of Shame');
 
         // Serve Mud of Shame
         await click('Serve Punishment: Mud of Shame');
@@ -177,6 +201,13 @@ try {
   });
 
   const state = journeyResult.result?.value;
+  if (journeyResult.exceptionDetails) {
+    throw new Error(
+      journeyResult.exceptionDetails.exception?.description ??
+        journeyResult.exceptionDetails.text ??
+        'Browser journey threw an unknown exception.',
+    );
+  }
   process.stdout.write(`${JSON.stringify({ result: state })}\n`);
 
   if (witnessScreenshotPath && state?.witnessCaptureReady) {
@@ -186,6 +217,18 @@ try {
     });
     await writeFile(witnessScreenshotPath, Buffer.from(screenshot.data, 'base64'));
     process.stdout.write(`Witness screenshot saved to ${witnessScreenshotPath}\n`);
+    socket.close();
+    browser.kill();
+    await rm(temporaryRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 150 });
+    process.exit(0);
+  }
+  if (sceneScreenshotPath && state?.sceneCaptureReady) {
+    const screenshot = await send('Page.captureScreenshot', {
+      format: 'png',
+      captureBeyondViewport: false,
+    });
+    await writeFile(sceneScreenshotPath, Buffer.from(screenshot.data, 'base64'));
+    process.stdout.write(`Scene screenshot saved to ${sceneScreenshotPath}\n`);
     socket.close();
     browser.kill();
     await rm(temporaryRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 150 });
