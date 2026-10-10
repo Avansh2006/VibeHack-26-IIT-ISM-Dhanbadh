@@ -8,6 +8,7 @@ export interface DigitalMenaceCertificateProps {
   issuedAt: number;
   clickCount: number;
   verdict: Verdict;
+  punishment?: string | undefined;
   onReplay(this: void): void;
 }
 
@@ -16,6 +17,7 @@ export function DigitalMenaceCertificate({
   issuedAt,
   clickCount,
   verdict,
+  punishment,
   onReplay,
 }: DigitalMenaceCertificateProps) {
   const issuedDate = new Date(issuedAt).toLocaleDateString('en-GB', {
@@ -24,8 +26,8 @@ export function DigitalMenaceCertificate({
     year: 'numeric',
   });
   const certificateHref = useMemo(
-    () => createCertificateDataUri({ certificateId, issuedAt, clickCount, verdict }),
-    [certificateId, clickCount, issuedAt, verdict],
+    () => createCertificateDataUri({ certificateId, issuedAt, clickCount, verdict, punishment }),
+    [certificateId, clickCount, issuedAt, punishment, verdict],
   );
 
   return (
@@ -48,6 +50,14 @@ export function DigitalMenaceCertificate({
           <div className="mx-auto my-8 h-px max-w-2xl bg-gradient-to-r from-transparent via-amber-300/50 to-transparent" />
           <p className="text-xl font-black text-white sm:text-2xl">{verdict.title}</p>
           <p className="mx-auto mt-3 max-w-3xl text-sm leading-7 text-white/60">{verdict.ruling}</p>
+          {punishment ? (
+            <div className="mx-auto mt-6 max-w-2xl rounded-2xl border border-amber-300/30 bg-amber-400/10 p-4 text-center">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-300">
+                Served Punishment
+              </p>
+              <p className="mt-1 text-base font-extrabold text-amber-100">{punishment}</p>
+            </div>
+          ) : null}
           <div className="mt-9 grid gap-4 text-left sm:grid-cols-3">
             <CertificateFact label="Evidence count" value={String(clickCount)} />
             <CertificateFact label="Issued" value={issuedDate} />

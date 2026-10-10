@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { existsSync } from 'node:fs';
-import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -9,6 +9,9 @@ import path from 'node:path';
 const previewUrl = process.env.CLICKPOCALYPSE_PREVIEW_URL ?? 'http://127.0.0.1:4173';
 const reducedMotion = process.env.CLICKPOCALYPSE_REDUCED_MOTION === '1';
 const mobileViewport = process.env.CLICKPOCALYPSE_MOBILE === '1';
+const disableWebGl = process.env.CLICKPOCALYPSE_DISABLE_WEBGL === '1';
+const skipNews = process.env.CLICKPOCALYPSE_SKIP_NEWS === '1';
+const screenshotPath = process.env.CLICKPOCALYPSE_SCREENSHOT_PATH;
 const browserCandidates = [
   process.env.CHROME_PATH,
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
@@ -27,12 +30,14 @@ const browserArguments = [
   '--disable-gpu',
   '--no-first-run',
   '--disable-default-apps',
+  '--autoplay-policy=no-user-gesture-required',
   '--disable-popup-blocking',
   '--remote-allow-origins=*',
   `--remote-debugging-port=${port}`,
   `--user-data-dir=${profileDirectory}`,
-  ...(mobileViewport ? ['--window-size=390,844'] : []),
+  `--window-size=${mobileViewport ? '390,844' : '1440,900'}`,
   ...(reducedMotion ? ['--force-prefers-reduced-motion'] : []),
+  ...(disableWebGl ? ['--disable-webgl', '--disable-software-rasterizer'] : []),
   previewUrl,
 ];
 const browser = spawn(browserPath, browserArguments, { stdio: 'ignore', windowsHide: true });
@@ -64,10 +69,12 @@ try {
       (async () => {
         const pause = (duration = 90) => new Promise((resolve) => setTimeout(resolve, duration));
         const click = async (label, selector = 'button') => {
-          const deadline = Date.now() + 5000;
+          const deadline = Date.now() + 60000;
           while (Date.now() < deadline) {
-            const candidate = [...document.querySelectorAll(selector)].find((element) =>
-              element.textContent?.replace(/\\s+/g, ' ').trim().includes(label),
+            const candidate = [...document.querySelectorAll(selector)].find(
+              (element) =>
+                !element.disabled &&
+                element.textContent?.replace(/\\s+/g, ' ').trim().includes(label),
             );
             if (candidate) {
               candidate.click();
@@ -88,15 +95,33 @@ try {
         await click('File an appeal');
         await click('button looked emotionally available');
         await click('lawyer who understands CSS');
-        await click('Weather is not admissible evidence');
-        await click('Test structural integrity');
+        await click('A samosa wearing glasses');
+        await click('Skip impossible CAPTCHA');
         await click('Decline pixel demands');
         await click('PROVE MY INNOCENCE');
-        await pause(1400);
+        await pause(${screenshotPath ? '3000' : '1400'});
+        const fallbackVisible = document.body.innerText.includes('WebGL recused itself');
+        if (${Boolean(screenshotPath)}) return { courtroomReady: true };
+        if (${reducedMotion}) await click('Mute court');
         await click('Face the extremely online judge');
+        const storyPhases = [];
+        const storyDeadline = Date.now() + 180000;
+        let newsSkipped = false;
+        while (Date.now() < storyDeadline) {
+          const root = document.querySelector('[data-story-phase]');
+          const storyPhase = root?.getAttribute('data-story-phase');
+          if (storyPhase && storyPhases.at(-1) !== storyPhase) storyPhases.push(storyPhase);
+          if (${skipNews} && storyPhase === 'news' && !newsSkipped) {
+            await click('Skip interruption');
+            newsSkipped = true;
+          }
+          if (storyPhase === 'evidence') break;
+          await pause(40);
+        }
+        const newsResult = document.querySelector('[data-news-result]')?.getAttribute('data-news-result');
         await click('Attempt a legally questionable defense');
         await click('I was framed by JavaScript');
-        await pause(1500);
+        await click('One samosa');
         await click('Issue my Digital Menace certificate');
         const certificateLink = document.querySelector('a[download]');
         return {
@@ -104,17 +129,52 @@ try {
           certificateHref: certificateLink?.href,
           certificateFilename: certificateLink?.download,
           reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+          fallbackVisible,
+          muted: document.body.innerText.includes('Unmute court'),
+          storyPhases,
+          newsResult,
         };
       })()
     `,
   });
 
   const journeyState = journeyResult.result?.value;
+  if (screenshotPath && journeyState?.courtroomReady) {
+    const screenshot = await send('Page.captureScreenshot', {
+      format: 'png',
+      captureBeyondViewport: false,
+    });
+    await writeFile(screenshotPath, Buffer.from(screenshot.data, 'base64'));
+    process.stdout.write(
+      `${JSON.stringify({ browser: path.basename(browserPath), screenshotPath })}\n`,
+    );
+    socket.close();
+    browser.kill();
+    await rm(temporaryRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 150 });
+    process.exit(0);
+  }
   if (!journeyState?.certificateVisible) {
     throw new Error('The browser journey did not reach the Digital Menace certificate.');
   }
   if (reducedMotion && !journeyState.reducedMotion) {
     throw new Error('Chrome did not activate the requested reduced-motion media preference.');
+  }
+  if (disableWebGl && !journeyState.fallbackVisible) {
+    throw new Error('The WebGL-disabled journey did not render the playable fallback.');
+  }
+  if (reducedMotion && !journeyState.muted) {
+    throw new Error('The muted journey did not preserve the mute state.');
+  }
+  if (
+    !['news', 'witness', 'evidence'].every((phase) => journeyState.storyPhases?.includes(phase))
+  ) {
+    throw new Error('The browser journey did not preserve the news-to-witness story flow.');
+  }
+  if (skipNews && journeyState.newsResult !== 'skipped') {
+    throw new Error('The breaking-news skip control did not continue the trial.');
+  }
+  if (!skipNews && journeyState.newsResult !== 'ended') {
+    throw new Error('The breaking-news video did not complete normally.');
   }
   if (
     !journeyState.certificateHref?.startsWith('data:image/svg+xml') ||
@@ -167,6 +227,7 @@ try {
       browser: path.basename(browserPath),
       downloaded: true,
       mobileViewport,
+      webGlFallback: journeyState.fallbackVisible,
       reducedMotion: journeyState.reducedMotion,
       replayed,
       filename: path.basename(downloadedFile),

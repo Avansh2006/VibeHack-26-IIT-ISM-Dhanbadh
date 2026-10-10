@@ -42,4 +42,21 @@ describe('digital menace certificate', () => {
     expect(uri).toMatch(/^data:image\/svg\+xml;charset=utf-8,/u);
     expect(decodeURIComponent(uri.split(',')[1] ?? '')).toBe(createCertificateSvg(details));
   });
+
+  it('renders served punishment in SVG when provided', () => {
+    const svg = createCertificateSvg({
+      certificateId: 'CASE-404',
+      issuedAt: Date.UTC(2026, 9, 9),
+      clickCount: 42,
+      verdict: {
+        title: 'Guilty As Charged',
+        ruling: 'Extreme click negligence detected.',
+        sentence: '300 years of browser ban.',
+        menaceLevel: 'Grand Menace',
+      },
+      punishment: 'Mud of Shame (Score: 2.4/10)',
+    });
+
+    expect(svg).toContain('SERVED PUNISHMENT: MUD OF SHAME (SCORE: 2.4/10)');
+  });
 });

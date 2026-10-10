@@ -1,17 +1,25 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import {
-  ArrowRight,
-  BadgeAlert,
-  Gavel,
-  ScrollText,
-  ShieldQuestion,
-  Volume2,
-  VolumeX,
-} from 'lucide-react';
-import { gsap } from 'gsap';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowRight, FastForward, Gavel, RotateCcw, Volume2, VolumeX } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
-import { useCourtroomAudio } from '@/audio';
+import {
+  useCourtroomAudio,
+  useCourtroomVoices,
+  type CourtroomSpeaker,
+  type SpokenLine,
+} from '@/audio';
 import { DigitalMenaceCertificate } from '@/components/certificate';
+import {
+  BailForm,
+  FakeOsUpdate,
+  LegalLoadingSimulator,
+  PasswordPrison,
+} from '@/components/courtroom/CourtroomInterruptions';
+import {
+  MemeReaction,
+  type MemePlaybackResult,
+  type MemeReactionHandle,
+} from '@/components/courtroom/MemeReaction';
+import type { MemeReactionDefinition, MemeReactionId } from '@/components/courtroom/memeReactions';
 import {
   DEFENSE_OPTIONS,
   getVerdict,
@@ -19,9 +27,11 @@ import {
   summarizeEvidence,
   type DefenseId,
 } from '@/components/courtroom/trialLogic';
+import type { PunishmentType, TrialPhase } from '@/components/courtroom/CourtroomScene3D';
 import type { InteractionRecord } from '@/shared/contracts';
+import './courtroom.css';
 
-type TrialPhase = 'summons' | 'evidence' | 'defense' | 'objection' | 'verdict' | 'certificate';
+const CourtroomScene3D = lazy(() => import('@/components/courtroom/CourtroomScene3D'));
 
 export interface CourtroomExperienceProps {
   sessionId: string;
@@ -32,15 +42,109 @@ export interface CourtroomExperienceProps {
 
 const PHASE_LABELS: Readonly<Record<TrialPhase, string>> = {
   summons: 'Court convening',
+  news: 'Breaking News interruption',
+  witness: 'Surprise witness',
+  breakup: 'Relationship rollback',
   evidence: 'Exhibits entered',
   defense: 'Questionable defense',
   objection: 'Prosecutorial yelling',
+  jury: 'Browser-tab jury',
+  bribe: 'Highly ethical negotiation',
+  bribeResult: 'Bribe entered into evidence',
+  rage: 'Judicial rage mode',
+  mouse: 'Mouse witness',
   verdict: 'Judgment rendered',
+  sponsor: 'Contractually suspicious ad',
+  plea: 'Impossible plea bargain',
+  pleaResult: 'Plea regretted instantly',
+  secret: 'Final judicial meltdown',
+  roulette: 'Punishment roulette',
+  mud: 'Mud of Shame',
+  spinner: 'Human loading spinner',
+  apology: 'Court-ordered apology',
+  password: 'Password prison',
+  appeal: 'The final twist',
   certificate: 'Menace certified',
 };
 
+const SPEAKER_LABELS: Readonly<Record<CourtroomSpeaker, string>> = {
+  judge: 'Hon. Justice Null Pointer',
+  prosecutor: 'Ms. Terms & Conditions',
+  defendant: 'The Defendant (unprompted)',
+  defense: 'Counsel Error 404',
+  clerk: 'Bailiff Bitflip',
+  assistant: 'Counsel Error 404',
+  anchor: 'Channel 13 Emergency Desk',
+  girlfriend: 'The Localhost Girlfriend',
+  jury: 'The Browser-Tab Jury',
+  mouse: 'Mr. Logitech, Hostile Witness',
+  sponsor: 'Definitely Real Sponsor Voice',
+};
+
+type BribeChoice = 'cash' | 'samosa' | 'star';
+type PleaChoice = 'buffering' | 'ad';
+
+const PUNISHMENTS: Readonly<
+  Record<PunishmentType, { title: string; subtitle: string; description: string; angle: number }>
+> = {
+  mud: {
+    title: 'Mud of Shame',
+    subtitle: 'Acrobatic public humiliation',
+    description: 'One heroic front roll into mud that has already retained counsel.',
+    angle: 0,
+  },
+  spinner: {
+    title: 'Human Loading Spinner',
+    subtitle: '404 hours of manual buffering',
+    description: 'Buffer manually until your dignity reaches one hundred percent. It will not.',
+    angle: (Math.PI * 2) / 3,
+  },
+  apology: {
+    title: 'Court-Ordered Apology',
+    subtitle: 'Recite unhinged confessions',
+    description: 'Apologize to every bruised pixel while the scrollbar refuses eye contact.',
+    angle: (Math.PI * 4) / 3,
+  },
+  password: {
+    title: 'Password Prison',
+    subtitle: 'Thirty seconds of credential despair',
+    description: 'Satisfy a password policy authored by a vindictive samosa.',
+    angle: Math.PI / 2,
+  },
+};
+
+const APOLOGY_OPTIONS = [
+  {
+    id: 1,
+    text: 'I solemnly apologize to the pixels I bruised; I genuinely thought clicking was free speech.',
+    reactionSpeaker: 'prosecutor' as const,
+    reactionText: 'Hear that? Even the scroll bar is weeping at this insincerity!',
+  },
+  {
+    id: 2,
+    text: 'My mouse was possessed by the unholy spirit of Internet Explorer 6.',
+    reactionSpeaker: 'defense' as const,
+    reactionText: 'Your Honor, in our defense, the button was wearing very provocative CSS!',
+  },
+  {
+    id: 3,
+    text: 'I regret nothing and will click every glowing rectangle until the heat death of the universe.',
+    reactionSpeaker: 'judge' as const,
+    reactionText: 'Contempt! Maximum contempt! The court will not tolerate unbuffered swagger!',
+  },
+] as const;
+
 function certificateIdForSession(sessionId: string): string {
   return `CASE-${sessionId.replace('session-', '').replaceAll('-', '').slice(0, 8).toUpperCase()}`;
+}
+
+function hasWebGlSupport(): boolean {
+  try {
+    const canvas = document.createElement('canvas');
+    return Boolean(canvas.getContext('webgl2') ?? canvas.getContext('webgl'));
+  } catch {
+    return false;
+  }
 }
 
 export function CourtroomExperience({
@@ -51,341 +155,1350 @@ export function CourtroomExperience({
 }: CourtroomExperienceProps) {
   const [phase, setPhase] = useState<TrialPhase>('summons');
   const [selectedDefense, setSelectedDefense] = useState<DefenseId | null>(null);
-  const rootRef = useRef<HTMLDivElement>(null);
+  const [activeLine, setActiveLine] = useState<SpokenLine | null>(null);
+  const [gavelPulse, setGavelPulse] = useState(0);
+  const [openingStep, setOpeningStep] = useState<
+    'ready' | 'defendant' | 'prosecutor' | 'judge' | 'complete'
+  >('ready');
+  const [openingAudioResult, setOpeningAudioResult] = useState<'pending' | 'ended' | 'failed'>(
+    'pending',
+  );
+  const [newsResult, setNewsResult] = useState<'pending' | 'ended' | 'skipped' | 'failed'>(
+    'pending',
+  );
+  const [witnessReady, setWitnessReady] = useState(false);
+  const [bribeChoice, setBribeChoice] = useState<BribeChoice | null>(null);
+  const [pleaChoice, setPleaChoice] = useState<PleaChoice | null>(null);
+  const [innocenceClaims, setInnocenceClaims] = useState(0);
+  const [appealReveal, setAppealReveal] = useState(false);
+  const [activeMeme, setActiveMeme] = useState<MemeReactionId | null>(null);
+  const [verdictReady, setVerdictReady] = useState(false);
+  const [arrestResult, setArrestResult] = useState<'pending' | 'ended' | 'skipped' | 'failed'>(
+    'pending',
+  );
+  const [postCredits, setPostCredits] = useState<'idle' | 'playing' | 'complete'>('idle');
+  const [legalProcessingComplete, setLegalProcessingComplete] = useState(false);
+  const [bailOpen, setBailOpen] = useState(false);
+  const [osUpdateOpen, setOsUpdateOpen] = useState(false);
+
+  // Punishment roulette & mini-game state
+  const [selectedPunishment, setSelectedPunishment] = useState<PunishmentType>('mud');
+  const [rouletteSpinning, setRouletteSpinning] = useState(false);
+  const [rouletteAngle, setRouletteAngle] = useState(0);
+  const [mudScore, setMudScore] = useState(2.4);
+  const [spinnerProgress, setSpinnerProgress] = useState(15);
+  const [selectedApology, setSelectedApology] = useState<number | null>(null);
+  const [punishmentSentence, setPunishmentSentence] = useState<string>(
+    'Mud of Shame (Score: 2.4/10)',
+  );
+
   const reducedMotion = useReducedMotion() ?? false;
   const audio = useCourtroomAudio();
+  const voices = useCourtroomVoices(audio.muted);
+  const { muted, playCue, startAmbience, stop: stopAudio, toggleMute } = audio;
+  const { skip: skipVoice, speak } = voices;
+  const speakRef = useRef(speak);
+  const directorGeneration = useRef(0);
+  const currentMediaCancelRef = useRef<(() => void) | null>(null);
+  const mardAudioRef = useRef<HTMLAudioElement | null>(null);
+  const newsVideoRef = useRef<HTMLVideoElement | null>(null);
+  const arrestVideoRef = useRef<HTMLVideoElement | null>(null);
+  const arrestStartedRef = useRef(false);
+  const memeReactionRef = useRef<MemeReactionHandle | null>(null);
+  const mutedRef = useRef(muted);
+  const witnessReadyRef = useRef(false);
+  const witnessReadyResolverRef = useRef<(() => void) | null>(null);
   const summary = useMemo(() => summarizeEvidence(evidenceLog), [evidenceLog]);
   const exhibits = useMemo(() => selectCourtroomExhibits(evidenceLog), [evidenceLog]);
   const verdict = selectedDefense ? getVerdict(selectedDefense, summary) : null;
+  const webGlSupported = useMemo(() => hasWebGlSupport(), []);
 
-  useLayoutEffect(() => {
-    window.scrollTo(0, 0);
-  }, [phase]);
+  const handleWitnessReady = useCallback(() => {
+    witnessReadyRef.current = true;
+    setWitnessReady(true);
+    witnessReadyResolverRef.current?.();
+    witnessReadyResolverRef.current = null;
+  }, []);
 
-  useLayoutEffect(() => {
-    const root = rootRef.current;
-    if (!root) return;
-
-    const context = gsap.context(() => {
-      const duration = reducedMotion ? 0.01 : 0.65;
-      gsap.fromTo(
-        '[data-scene]',
-        { autoAlpha: 0, y: reducedMotion ? 0 : 28 },
-        { autoAlpha: 1, y: 0, duration, ease: 'power3.out' },
-      );
-
-      if (phase === 'summons' && !reducedMotion) {
-        gsap.fromTo(
-          '[data-curtain-left]',
-          { xPercent: 0 },
-          { xPercent: -102, duration: 1.2, ease: 'power4.inOut' },
-        );
-        gsap.fromTo(
-          '[data-curtain-right]',
-          { xPercent: 0 },
-          { xPercent: 102, duration: 1.2, ease: 'power4.inOut' },
-        );
-        gsap.fromTo(
-          '[data-debris]',
-          { y: -120, rotate: -18, autoAlpha: 0.9 },
-          {
-            y: '115vh',
-            rotate: 260,
-            autoAlpha: 0,
-            duration: 1.45,
-            stagger: 0.07,
-            ease: 'power2.in',
-          },
-        );
-      }
-
-      if (phase === 'objection' && !reducedMotion) {
-        gsap.fromTo(
-          '[data-objection]',
-          { scale: 0.2, rotate: -12, autoAlpha: 0 },
-          {
-            scale: 1,
-            rotate: -3,
-            autoAlpha: 1,
-            duration: 0.38,
-            ease: 'back.out(2.6)',
-          },
-        );
-      }
-
-      if (phase === 'verdict' && !reducedMotion) {
-        gsap.fromTo(
-          '[data-judge]',
-          { y: 0 },
-          { y: -9, duration: 0.16, repeat: 3, yoyo: true, ease: 'power1.inOut' },
-        );
-      }
-    }, root);
-
-    return () => context.revert();
-  }, [phase, reducedMotion]);
+  const waitForWitnessReady = useCallback(async () => {
+    if (!webGlSupported || witnessReadyRef.current) return;
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(watchdog);
+        resolve();
+      };
+      const watchdog = window.setTimeout(finish, 12000);
+      witnessReadyResolverRef.current = finish;
+    });
+  }, [webGlSupported]);
 
   useEffect(() => {
-    if (phase !== 'objection') return;
+    speakRef.current = speak;
+  }, [speak]);
 
-    const timeout = window.setTimeout(
-      () => {
+  useEffect(() => {
+    mutedRef.current = muted;
+  }, [muted]);
+
+  useEffect(() => {
+    if (arrestResult === 'pending') return;
+    startAmbience();
+    return stopAudio;
+  }, [arrestResult, startAmbience, stopAudio]);
+
+  useEffect(() => {
+    const asset = new Audio(`${import.meta.env.BASE_URL}audio/mard.mpeg`);
+    asset.preload = 'auto';
+    asset.muted = false;
+    mardAudioRef.current = asset;
+    return () => {
+      directorGeneration.current += 1;
+      currentMediaCancelRef.current?.();
+      skipVoice();
+      asset.pause();
+      asset.removeAttribute('src');
+      asset.load();
+      mardAudioRef.current = null;
+    };
+  }, [skipVoice]);
+
+  useEffect(() => {
+    if (mardAudioRef.current) mardAudioRef.current.muted = muted;
+    if (arrestVideoRef.current) arrestVideoRef.current.muted = muted;
+  }, [muted]);
+
+  const strikeGavel = useCallback(() => {
+    setGavelPulse((value) => value + 1);
+    playCue('gavel');
+  }, [playCue]);
+
+  const handleMemeActiveChange = useCallback((reaction: MemeReactionDefinition | null) => {
+    setActiveMeme(reaction?.id ?? null);
+    if (reaction) {
+      setActiveLine({ speaker: reaction.cameraSpeaker, text: reaction.caption });
+    }
+  }, []);
+
+  const playMeme = useCallback(
+    async (id: MemeReactionId): Promise<MemePlaybackResult> => {
+      const player = memeReactionRef.current;
+      if (!player) return 'failed';
+      skipVoice();
+      stopAudio();
+      const cancel = () => player.skip();
+      currentMediaCancelRef.current = cancel;
+      const result = await player.play(id);
+      if (currentMediaCancelRef.current === cancel) currentMediaCancelRef.current = null;
+      startAmbience();
+      return result;
+    },
+    [skipVoice, startAmbience, stopAudio],
+  );
+
+  const waitForSpeech = useCallback(
+    async (line: SpokenLine) => {
+      setActiveLine(line);
+      if (mutedRef.current) {
+        await new Promise((resolve) =>
+          window.setTimeout(resolve, reducedMotion ? 160 : Math.min(2200, line.text.length * 34)),
+        );
+        return;
+      }
+      await new Promise<void>((resolve) => {
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(watchdog);
+          resolve();
+        };
+        const watchdog = window.setTimeout(
+          () => {
+            skipVoice();
+            finish();
+          },
+          Math.min(45000, Math.max(15000, line.text.length * 260)),
+        );
+        void speakRef.current(line).then(finish, finish);
+      });
+      await new Promise((resolve) => window.setTimeout(resolve, reducedMotion ? 60 : 640));
+    },
+    [reducedMotion, skipVoice],
+  );
+
+  const waitForMedia = useCallback(
+    (media: HTMLMediaElement, watchdogMs: number) =>
+      new Promise<'ended' | 'failed' | 'skipped'>((resolve) => {
+        let settled = false;
+        const finish = (result: 'ended' | 'failed' | 'skipped') => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(watchdog);
+          media.removeEventListener('ended', handleEnded);
+          media.removeEventListener('error', handleError);
+          if (currentMediaCancelRef.current === cancel) currentMediaCancelRef.current = null;
+          resolve(result);
+        };
+        const handleEnded = () => finish('ended');
+        const handleError = () => finish('failed');
+        const cancel = () => {
+          media.pause();
+          finish('skipped');
+        };
+        const watchdog = window.setTimeout(() => {
+          media.pause();
+          finish('failed');
+        }, watchdogMs);
+        currentMediaCancelRef.current = cancel;
+        media.addEventListener('ended', handleEnded, { once: true });
+        media.addEventListener('error', handleError, { once: true });
+        void media.play().catch(handleError);
+      }),
+    [],
+  );
+
+  useEffect(() => {
+    const video = arrestVideoRef.current;
+    if (!video || arrestResult !== 'pending' || arrestStartedRef.current) return;
+    arrestStartedRef.current = true;
+    video.currentTime = 0;
+    video.muted = mutedRef.current;
+    void waitForMedia(video, 30000).then(setArrestResult);
+    return () => video.pause();
+  }, [arrestResult, waitForMedia]);
+
+  const cancelDirector = useCallback(() => {
+    directorGeneration.current += 1;
+    currentMediaCancelRef.current?.();
+    currentMediaCancelRef.current = null;
+    witnessReadyResolverRef.current?.();
+    witnessReadyResolverRef.current = null;
+    skipVoice();
+  }, [skipVoice]);
+
+  useEffect(() => {
+    if (['summons', 'news', 'witness', 'certificate'].includes(phase)) return;
+    const generation = directorGeneration.current + 1;
+    directorGeneration.current = generation;
+    const lines = dialogueForPhase(phase, verdict?.title, bribeChoice, pleaChoice);
+    const perform = async () => {
+      if (phase === 'verdict') setVerdictReady(false);
+      if (phase === 'bribeResult' && bribeChoice === 'samosa') {
+        await playMeme('golden-samosa');
+        if (directorGeneration.current !== generation) return;
+      }
+      for (const line of lines) {
+        if (directorGeneration.current !== generation) return;
+        await waitForSpeech(line);
+      }
+      if (directorGeneration.current !== generation) return;
+      if (phase === 'breakup') await playMeme('girlfriend-breakup');
+      if (phase === 'bribeResult' && bribeChoice !== 'samosa') await playMeme('judge-bribe');
+      if (phase === 'mouse' && selectedDefense === 'mouse') await playMeme('unexpected-witness');
+      if (phase === 'verdict') await playMeme('guilty-verdict');
+      if (phase === 'appeal' && selectedPunishment === 'mud') await playMeme('failed-appeal');
+      if (directorGeneration.current !== generation) return;
+      if (phase === 'verdict') setVerdictReady(true);
+      setActiveLine(null);
+      if (phase === 'breakup') {
+        setPhase('evidence');
+      } else if (phase === 'objection') {
+        setGavelPulse((value) => value + 1);
+        playCue('objection');
+        setPhase('jury');
+      } else if (phase === 'jury') {
+        playCue('buzzer');
+        setPhase('bribe');
+      } else if (phase === 'bribeResult') {
+        setGavelPulse((value) => value + 1);
+        setPhase('rage');
+      } else if (phase === 'rage') {
+        playCue('gavel');
+        setPhase('mouse');
+      } else if (phase === 'mouse') {
+        playCue('verdict');
         setPhase('verdict');
-        audio.playCue('verdict');
-      },
-      reducedMotion ? 250 : 1250,
-    );
-    return () => window.clearTimeout(timeout);
-  }, [audio, phase, reducedMotion]);
+      } else if (phase === 'sponsor') {
+        setPhase('plea');
+      } else if (phase === 'pleaResult') {
+        setPhase('roulette');
+      } else if (phase === 'secret') {
+        setInnocenceClaims(0);
+        setPhase('verdict');
+      } else if (phase === 'appeal') {
+        setAppealReveal(true);
+        playCue('buzzer');
+        playCue('cheer');
+      }
+    };
+    void perform();
+    return cancelDirector;
+  }, [
+    bribeChoice,
+    cancelDirector,
+    phase,
+    playCue,
+    playMeme,
+    pleaChoice,
+    selectedDefense,
+    selectedPunishment,
+    verdict?.title,
+    waitForSpeech,
+  ]);
+
+  const skipDialogue = () => {
+    if (phase === 'news') setNewsResult('skipped');
+    currentMediaCancelRef.current?.();
+    skipVoice();
+  };
+
+  const startOpeningDialogue = async () => {
+    if (openingStep !== 'ready') return;
+    cancelDirector();
+    const generation = directorGeneration.current + 1;
+    directorGeneration.current = generation;
+    startAmbience();
+    await memeReactionRef.current?.prime();
+    const isCurrent = () => directorGeneration.current === generation;
+
+    for (const media of [mardAudioRef.current, newsVideoRef.current]) {
+      if (!media) continue;
+      media.muted = true;
+      try {
+        await media.play();
+        media.pause();
+        media.currentTime = 0;
+      } catch {
+        // The explicit playback path below reports failure and continues safely.
+      }
+      media.muted = mutedRef.current;
+    }
+
+    setOpeningStep('defendant');
+    await waitForSpeech({ speaker: 'defendant', text: 'I AM INNOCENT!' });
+    if (!isCurrent()) return;
+    await playMeme('innocence-claim');
+    if (!isCurrent()) return;
+
+    setOpeningStep('prosecutor');
+    setActiveLine({ speaker: 'prosecutor', text: 'Ek kachori do samosa.' });
+    const mard = mardAudioRef.current;
+    let mardResult: 'ended' | 'failed' | 'skipped' = 'failed';
+    if (mard) {
+      mard.currentTime = 0;
+      mard.muted = mutedRef.current;
+      mardResult = await waitForMedia(mard, 20000);
+    }
+    setOpeningAudioResult(mardResult === 'ended' ? 'ended' : 'failed');
+    if (!isCurrent()) return;
+    await playMeme('samosa-rebuttal');
+    if (!isCurrent()) return;
+
+    setOpeningStep('judge');
+    await waitForSpeech({
+      speaker: 'judge',
+      text: "ORDER! ORDER! Let's continue with the court.",
+    });
+    if (!isCurrent()) return;
+    setOpeningStep('complete');
+    strikeGavel();
+
+    setPhase('news');
+    setNewsResult('pending');
+    const newsLine: SpokenLine = {
+      speaker: 'anchor',
+      text: `Breaking news! Defendant caught clicking ${summary.totalClicks} times. Even his mouse has hired a lawyer!`,
+    };
+    const video = newsVideoRef.current;
+    setActiveLine(newsLine);
+    if (video) {
+      video.currentTime = 0;
+      video.muted = mutedRef.current;
+      const [videoResult] = await Promise.all([
+        waitForMedia(video, 90000),
+        waitForSpeech(newsLine),
+      ]);
+      setNewsResult(videoResult);
+    } else {
+      setNewsResult('failed');
+      await waitForSpeech(newsLine);
+    }
+    if (!isCurrent()) return;
+
+    setPhase('witness');
+    witnessReadyRef.current = false;
+    setWitnessReady(false);
+    await waitForWitnessReady();
+    if (!isCurrent()) return;
+    if (!reducedMotion) {
+      await new Promise((resolve) => window.setTimeout(resolve, 560));
+    }
+    const witnessLines = dialogueForPhase('witness');
+    for (const [index, line] of witnessLines.entries()) {
+      if (!isCurrent()) return;
+      await waitForSpeech(line);
+      if (index === 0) await playMeme('girlfriend-evidence');
+    }
+    if (!isCurrent()) return;
+    setActiveLine(null);
+    strikeGavel();
+    setPhase('breakup');
+  };
 
   const chooseDefense = (defense: DefenseId) => {
     setSelectedDefense(defense);
     setPhase('objection');
-    audio.playCue('objection');
+    setGavelPulse((value) => value + 1);
+    playCue('objection');
   };
+
+  const chooseBribe = (choice: BribeChoice) => {
+    setBribeChoice(choice);
+    if (choice === 'samosa') {
+      setPunishmentSentence('DOUBLE SENTENCE: Samosa-Based Judicial Corruption');
+    }
+    setPhase('bribeResult');
+  };
+
+  const choosePlea = (choice: PleaChoice) => {
+    setPleaChoice(choice);
+    if (choice === 'buffering') {
+      setSelectedPunishment('spinner');
+      setPunishmentSentence(
+        `${bribeChoice === 'samosa' ? 'DOUBLE SENTENCE: ' : ''}404 Years of Human Buffering`,
+      );
+    } else {
+      setSelectedPunishment('apology');
+      setPunishmentSentence(
+        `${bribeChoice === 'samosa' ? 'DOUBLE SENTENCE: ' : ''}One Unskippable Ad Every Time You Blink`,
+      );
+    }
+    setPhase('pleaResult');
+  };
+
+  const startPostCredits = async () => {
+    if (postCredits !== 'idle') return;
+    cancelDirector();
+    const generation = directorGeneration.current + 1;
+    directorGeneration.current = generation;
+    setPostCredits('playing');
+    await playMeme('judge-collapse');
+    if (directorGeneration.current !== generation) return;
+    await waitForSpeech({
+      speaker: 'judge',
+      text: 'SOMEONE DOUBLE-CLICKED A PDF?! I QUIT!',
+    });
+    if (directorGeneration.current !== generation) return;
+    setPostCredits('complete');
+  };
+
+  // Roulette Spin Animation
+  const spinRoulette = useCallback(() => {
+    if (rouletteSpinning) return;
+    setRouletteSpinning(true);
+    playCue('spin');
+    const punishments: PunishmentType[] = ['mud', 'spinner', 'apology', 'password'];
+    const pick = punishments[Math.floor(Math.random() * punishments.length)] ?? 'mud';
+    setSelectedPunishment(pick);
+
+    const targetAngle = PUNISHMENTS[pick].angle + Math.PI * 6;
+    setRouletteAngle(targetAngle);
+
+    window.setTimeout(
+      () => {
+        setRouletteSpinning(false);
+        strikeGavel();
+      },
+      reducedMotion ? 100 : 2200,
+    );
+  }, [playCue, reducedMotion, rouletteSpinning, strikeGavel]);
+
+  // Execute Punishment Mini-game
+  const startPunishment = (type: PunishmentType) => {
+    setSelectedPunishment(type);
+    if (type === 'mud') {
+      const score = Number((1.5 + Math.random() * 2.5).toFixed(1));
+      setMudScore(score);
+      setPunishmentSentence(`Mud of Shame (Judges' Score: ${score}/10)`);
+      setPhase('mud');
+      playCue('splash');
+      strikeGavel();
+    } else if (type === 'spinner') {
+      setSpinnerProgress(20);
+      setPunishmentSentence('404 Hours of Human Loading Spinner');
+      setPhase('spinner');
+      playCue('spin');
+      strikeGavel();
+    } else if (type === 'apology') {
+      setSelectedApology(null);
+      setPunishmentSentence('Court-Ordered Apology (Maximum Contempt)');
+      setPhase('apology');
+      strikeGavel();
+    } else {
+      setPunishmentSentence('Password Prison (Credentials Pending)');
+      setPhase('password');
+      strikeGavel();
+    }
+  };
+
+  // Trigger Appeal Climax
+  const triggerAppeal = () => {
+    setAppealReveal(false);
+    strikeGavel();
+    setPhase('appeal');
+  };
+
+  if (arrestResult === 'pending') {
+    return (
+      <section className="court-arrest" data-arrest-status="playing" aria-label="Digital arrest">
+        <video
+          ref={arrestVideoRef}
+          src={`${import.meta.env.BASE_URL}video/digital-arrest.mp4`}
+          playsInline
+          preload="auto"
+          muted={muted}
+          aria-label="SWAT officers arrest a computer mouse"
+        />
+        <div className="court-arrest-shade" aria-hidden="true" />
+        <div className="court-arrest-copy">
+          <span>DIGITAL ARREST WARRANT · CLICK UNIT 13</span>
+          <h1>YOU ARE UNDER ARREST FOR FIRST-DEGREE CLICKING.</h1>
+        </div>
+        <div className="court-arrest-controls">
+          <button type="button" onClick={() => currentMediaCancelRef.current?.()}>
+            <FastForward aria-hidden="true" size={16} /> Skip arrest
+          </button>
+          <button type="button" onClick={toggleMute} aria-pressed={muted}>
+            {muted ? (
+              <VolumeX aria-hidden="true" size={16} />
+            ) : (
+              <Volume2 aria-hidden="true" size={16} />
+            )}
+            {muted ? 'Unmute' : 'Mute'}
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  if (!legalProcessingComplete) {
+    return <LegalLoadingSimulator onComplete={() => setLegalProcessingComplete(true)} />;
+  }
 
   return (
     <div
-      ref={rootRef}
-      className="relative min-h-screen overflow-x-hidden bg-[#090605] text-amber-50"
+      className={`court-experience court-phase-${phase}`}
+      data-opening-step={openingStep}
+      data-opening-audio-result={openingAudioResult}
+      data-story-phase={phase}
+      data-news-result={newsResult}
+      data-tts-supported={voices.supported}
+      data-active-speaker={activeLine?.speaker ?? 'none'}
+      data-witness-ready={witnessReady}
+      data-arrest-status={arrestResult}
+      data-post-credits={postCredits}
     >
-      <CourtroomBackdrop phase={phase} />
-
-      {phase === 'summons' && !reducedMotion && (
-        <>
-          <div
-            data-curtain-left
-            aria-hidden="true"
-            className="pointer-events-none fixed inset-y-0 left-0 z-50 w-1/2 origin-left bg-[linear-gradient(90deg,#180409,#5f101f_70%,#25040b)] shadow-2xl"
-          />
-          <div
-            data-curtain-right
-            aria-hidden="true"
-            className="pointer-events-none fixed inset-y-0 right-0 z-50 w-1/2 origin-right bg-[linear-gradient(270deg,#180409,#5f101f_70%,#25040b)] shadow-2xl"
-          />
-          {Array.from({ length: 7 }, (_, index) => (
-            <span
-              key={index}
-              data-debris
-              aria-hidden="true"
-              className="pointer-events-none fixed z-40 h-4 w-20 rounded-full bg-fuchsia-300/65"
-              style={{ left: `${12 + index * 13}%`, top: `${5 + (index % 3) * 8}%` }}
+      <div className="court-canvas" aria-hidden="true">
+        {webGlSupported ? (
+          <Suspense fallback={<CourtroomFallback loading />}>
+            <CourtroomScene3D
+              phase={phase}
+              speaker={activeLine?.speaker ?? null}
+              exhibits={exhibits}
+              selectedDefense={selectedDefense}
+              selectedPunishment={selectedPunishment}
+              rouletteSpinning={rouletteSpinning}
+              rouletteAngle={rouletteAngle}
+              mudScore={mudScore}
+              spinnerProgress={spinnerProgress}
+              reducedMotion={reducedMotion}
+              gavelPulse={gavelPulse}
+              onGavel={strikeGavel}
+              onWitnessReady={handleWitnessReady}
+              onSpinDrag={(delta) =>
+                setSpinnerProgress((prev) => Math.min(100, Math.max(0, prev + delta)))
+              }
             />
-          ))}
-        </>
-      )}
-
-      <header className="relative z-30 mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-4 sm:px-8">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-amber-300">
-            Court of Interface Affairs
-          </p>
-          <p className="mt-1 text-sm font-bold text-white/45">{PHASE_LABELS[phase]}</p>
+          </Suspense>
+        ) : (
+          <CourtroomFallback />
+        )}
+      </div>
+      <div className="court-vignette" aria-hidden="true" />
+      {bailOpen ? <BailForm onClose={() => setBailOpen(false)} /> : null}
+      {osUpdateOpen ? <FakeOsUpdate onComplete={() => setOsUpdateOpen(false)} /> : null}
+      <div className={`court-news-layer ${phase === 'news' ? 'is-active' : ''}`}>
+        <video
+          ref={newsVideoRef}
+          src={`${import.meta.env.BASE_URL}video/video1.mp4`}
+          playsInline
+          preload="metadata"
+          muted={muted}
+          aria-label="Breaking news courtroom evidence reel"
+        />
+        <div className="court-news-bug" aria-hidden="true">
+          <strong>BREAKING NEWS</strong>
+          <span>LIVE · CLICK CRIME DESK</span>
         </div>
-        <button
-          type="button"
-          onClick={audio.toggleMute}
-          aria-pressed={audio.muted}
-          className="inline-flex min-h-11 items-center gap-2 rounded-full border border-amber-200/15 bg-black/25 px-4 text-xs font-bold text-amber-50 focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-amber-200"
-        >
-          {audio.muted ? (
-            <VolumeX aria-hidden="true" size={16} />
-          ) : (
-            <Volume2 aria-hidden="true" size={16} />
-          )}
-          {audio.muted ? 'Unmute court' : 'Mute court'}
-        </button>
+      </div>
+      <MemeReaction
+        ref={memeReactionRef}
+        muted={muted}
+        reducedMotion={reducedMotion}
+        onActiveChange={handleMemeActiveChange}
+      />
+
+      <header className="court-topbar">
+        <div>
+          <p className="court-kicker">The High Court of Interface Affairs</p>
+          <p className="court-phase-label">
+            {PHASE_LABELS[phase]} · Case {certificateIdForSession(sessionId)}
+          </p>
+        </div>
+        <div className="court-controls">
+          <button
+            type="button"
+            className="court-control"
+            onClick={strikeGavel}
+            aria-label="Strike the interactive gavel"
+          >
+            <Gavel aria-hidden="true" size={16} />
+            <span>Gavel</span>
+          </button>
+          <button
+            type="button"
+            className="court-control"
+            onClick={skipDialogue}
+            disabled={!activeLine && !activeMeme}
+          >
+            <FastForward aria-hidden="true" size={16} />
+            <span>
+              {activeMeme ? 'Skip reaction' : phase === 'news' ? 'Skip interruption' : 'Skip line'}
+            </span>
+          </button>
+          <button
+            type="button"
+            className="court-control"
+            onClick={() => {
+              skipVoice();
+              if (mardAudioRef.current) mardAudioRef.current.muted = !muted;
+              if (newsVideoRef.current) newsVideoRef.current.muted = !muted;
+              toggleMute();
+            }}
+            aria-pressed={muted}
+          >
+            {muted ? (
+              <VolumeX aria-hidden="true" size={16} />
+            ) : (
+              <Volume2 aria-hidden="true" size={16} />
+            )}
+            <span>{muted ? 'Unmute court' : 'Mute court'}</span>
+          </button>
+        </div>
       </header>
 
-      <main className="relative z-20 mx-auto flex w-full max-w-7xl flex-col px-4 pb-16 sm:px-8">
-        {phase !== 'certificate' && (
-          <div className="order-2 mt-7 grid gap-5 lg:order-1 lg:mt-0 lg:grid-cols-[0.72fr_1.6fr_0.78fr] lg:items-end">
-            <Prosecutor phase={phase} evidenceCount={summary.totalClicks} />
-            <Judge phase={phase} />
-            <CourtClerk exhibitCount={exhibits.length} />
-          </div>
-        )}
+      {phase !== 'certificate' ? (
+        <main className="court-ui">
+          {/* Phase 1: Summons */}
+          {phase === 'summons' ? (
+            <section className="court-title-sequence" aria-labelledby="trial-title">
+              <p>Supreme Court of Extremely Online Conduct</p>
+              <h1 id="trial-title">
+                THE INTERNET
+                <br />
+                <span>VS. YOU.</span>
+              </h1>
+              <div className="court-charge">13 counts of clicking with suspicious confidence</div>
+              <button
+                type="button"
+                className="court-primary"
+                onClick={() => void startOpeningDialogue()}
+                disabled={openingStep !== 'ready'}
+              >
+                {openingStep === 'ready'
+                  ? 'Face the extremely online judge'
+                  : 'Opening statements in progress…'}{' '}
+                <ArrowRight aria-hidden="true" size={18} />
+              </button>
+              <button type="button" className="court-control" onClick={() => setBailOpen(true)}>
+                Apply for imaginary bail
+              </button>
+            </section>
+          ) : null}
 
-        <section data-scene className="relative order-1 mt-2 lg:order-2 lg:mt-7">
-          {phase === 'summons' && (
-            <SummonsScene
-              evidenceCount={summary.totalClicks}
-              onContinue={() => {
-                audio.playCue('gavel');
-                setPhase('evidence');
-              }}
-            />
-          )}
+          {phase === 'news' ? (
+            <section className="court-news-caption" aria-label="Breaking news interruption">
+              <span>Channel 13½ · Courtroom Crisis Unit</span>
+              <strong>{summary.totalClicks} CLICKS. ZERO ALIBIS.</strong>
+            </section>
+          ) : null}
 
-          {phase === 'evidence' && (
-            <EvidenceScene
+          {phase === 'witness' || phase === 'breakup' ? (
+            <section className="court-witness-caption" aria-label="Surprise witness testimony">
+              <span>
+                {phase === 'breakup'
+                  ? 'BREAKUP DEPLOYMENT · STATUS: IRREVERSIBLE'
+                  : 'SURPRISE WITNESS · CONNECTION: LOCALHOST'}
+              </span>
+              <strong>
+                {phase === 'breakup'
+                  ? 'Relationship moved to production without you'
+                  : 'Relationship status: uncommitted changes'}
+              </strong>
+              <small>
+                Exhibit confirms {summary.totalClicks} clicks, {summary.cursorIncidents} suspicious
+                cursor incidents and {summary.escapeAttempts} escape attempts.
+              </small>
+            </section>
+          ) : null}
+
+          {/* Phase 2: Evidence */}
+          {phase === 'evidence' ? (
+            <EvidenceConsole
               summary={summary}
               exhibits={exhibits}
               onContinue={() => {
-                audio.playCue('gavel');
+                strikeGavel();
                 setPhase('defense');
               }}
             />
-          )}
+          ) : null}
 
-          {phase === 'defense' && <DefenseScene onChoose={chooseDefense} />}
+          {/* Phase 3: Defense Choice */}
+          {phase === 'defense' ? <DefenseConsole onChoose={chooseDefense} /> : null}
 
-          {phase === 'objection' && (
-            <div className="grid min-h-72 place-items-center" role="status" aria-live="assertive">
-              <div data-objection className="text-center">
-                <p className="text-6xl font-black tracking-[-0.08em] text-red-400 drop-shadow-[0_0_35px_rgba(248,113,113,0.45)] sm:text-9xl">
-                  OBJECTION!
-                </p>
-                <p className="mt-4 text-lg font-black text-amber-50">
-                  That defense contains dangerously high levels of confidence.
-                </p>
+          {/* Phase 4: Objection */}
+          {phase === 'objection' ? (
+            <section className="court-objection" role="status" aria-live="assertive">
+              <p>Prosecution event detected</p>
+              <h2>OBJECTION!</h2>
+              <span>That defense contains illegally concentrated audacity.</span>
+            </section>
+          ) : null}
+
+          {phase === 'jury' ? (
+            <section className="court-chaos-console court-jury-console">
+              <p>Six tabs deliberating · 4.7 GB memory consumed</p>
+              <h2>THE BROWSER JURY HAS A VERDICT</h2>
+              <strong>One dissenting tab has stopped responding.</strong>
+            </section>
+          ) : null}
+
+          {phase === 'bribe' ? (
+            <section className="court-chaos-console" aria-labelledby="bribe-title">
+              <p>Absolutely not a bribery menu</p>
+              <h2 id="bribe-title">Influence the judge</h2>
+              <div className="court-choice-grid">
+                <button type="button" onClick={() => chooseBribe('cash')}>
+                  <strong>₹10</strong>
+                  <small>Enough for 0.04% of a judicial chai</small>
+                </button>
+                <button type="button" onClick={() => chooseBribe('samosa')}>
+                  <strong>One samosa</strong>
+                  <small>Flaky, warm and constitutionally suspicious</small>
+                </button>
+                <button type="button" onClick={() => chooseBribe('star')}>
+                  <strong>GitHub star</strong>
+                  <small>Public validation with no monetary value</small>
+                </button>
               </div>
-            </div>
-          )}
+            </section>
+          ) : null}
 
-          {phase === 'verdict' && verdict && (
-            <VerdictScene
-              verdict={verdict}
-              onCertificate={() => {
-                audio.playCue('gavel');
-                setPhase('certificate');
-              }}
+          {phase === 'bribeResult' || phase === 'rage' ? (
+            <section className="court-chaos-console court-rage-console">
+              <p>
+                {phase === 'rage' ? 'JUDICIAL TEMPERATURE: 404°C' : 'Ethics server unavailable'}
+              </p>
+              <h2>{phase === 'rage' ? 'JUDGE RAGE MODE' : 'BRIBE PROCESSED'}</h2>
+              <strong>
+                {bribeChoice === 'samosa'
+                  ? 'The samosa was accepted. Your sentence was doubled.'
+                  : 'Your influence attempt has been screenshotted.'}
+              </strong>
+            </section>
+          ) : null}
+
+          {phase === 'mouse' ? (
+            <section className="court-chaos-console court-mouse-console">
+              <p>Hostile peripheral witness</p>
+              <h2>THE MOUSE TESTIFIES</h2>
+              <strong>Claiming repetitive-click trauma and unpaid overtime.</strong>
+            </section>
+          ) : null}
+
+          {/* Phase 5: Verdict */}
+          {phase === 'verdict' && verdict ? (
+            <section className="court-verdict">
+              <p>Unanimous decision by twelve browser tabs</p>
+              <h2>{verdict.title}</h2>
+              <p className="court-verdict-ruling">{verdict.ruling}</p>
+              <div>
+                <span>Sentence</span>
+                {verdict.sentence}
+              </div>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  className="court-primary"
+                  disabled={!verdictReady}
+                  onClick={() => {
+                    strikeGavel();
+                    setPhase('sponsor');
+                  }}
+                >
+                  Begin absurd sentencing <ArrowRight aria-hidden="true" size={18} />
+                </button>
+                <button
+                  type="button"
+                  className="court-control"
+                  disabled={!verdictReady || voices.speaking}
+                  onClick={() => {
+                    const next = innocenceClaims + 1;
+                    setInnocenceClaims(next);
+                    if (next >= 3) setPhase('secret');
+                    else {
+                      const line: SpokenLine = {
+                        speaker: 'judge',
+                        text: next === 1 ? 'Denied.' : 'Still denied. Stop refreshing innocence.',
+                      };
+                      setActiveLine(line);
+                    }
+                  }}
+                >
+                  I'm innocent{innocenceClaims ? ` (${innocenceClaims}/3 ignored)` : ''}
+                </button>
+                <button
+                  type="button"
+                  className="court-control"
+                  disabled={!verdictReady}
+                  onClick={() => {
+                    strikeGavel();
+                    setPhase('certificate');
+                  }}
+                >
+                  Issue my Digital Menace certificate
+                </button>
+                <button
+                  type="button"
+                  className="court-control"
+                  disabled={!verdictReady}
+                  onClick={() => setOsUpdateOpen(true)}
+                >
+                  Install verdict update
+                </button>
+              </div>
+            </section>
+          ) : null}
+
+          {phase === 'sponsor' ? (
+            <section className="court-chaos-console court-sponsor-console">
+              <p>UNSKIPPABLE SPONSOR MESSAGE · probably legal</p>
+              <h2>CTRL ALT DECEIT™</h2>
+              <strong>Accountability deleted in three convenient keystrokes.</strong>
+            </section>
+          ) : null}
+
+          {phase === 'plea' ? (
+            <section className="court-chaos-console" aria-labelledby="plea-title">
+              <p>The plea bargain nobody requested</p>
+              <h2 id="plea-title">Choose your inconvenience</h2>
+              <div className="court-choice-grid court-plea-grid">
+                <button type="button" onClick={() => choosePlea('buffering')}>
+                  <strong>404 years buffering</strong>
+                  <small>Release date: NaN</small>
+                </button>
+                <button type="button" onClick={() => choosePlea('ad')}>
+                  <strong>An ad every blink</strong>
+                  <small>Premium eyelids sold separately</small>
+                </button>
+              </div>
+            </section>
+          ) : null}
+
+          {phase === 'pleaResult' || phase === 'secret' ? (
+            <section className="court-chaos-console court-rage-console">
+              <p>{phase === 'secret' ? 'SECRET ENDING UNLOCKED' : 'Plea accepted by mistake'}</p>
+              <h2>{phase === 'secret' ? 'FINAL MELTDOWN' : 'NO REFUNDS'}</h2>
+              <strong>
+                {phase === 'secret'
+                  ? 'The judge has rate-limited innocence.'
+                  : pleaChoice === 'buffering'
+                    ? 'Your freedom is loading at zero percent.'
+                    : 'Blink responsibly. This message was an ad.'}
+              </strong>
+            </section>
+          ) : null}
+
+          {/* Phase 6: Punishment Roulette */}
+          {phase === 'roulette' ? (
+            <section className="court-roulette-console" aria-labelledby="roulette-title">
+              <div className="court-roulette-heading">
+                <p>Judicial Wheel of Misfortune</p>
+                <h2 id="roulette-title">Punishment Roulette</h2>
+                <small className="text-white/60">
+                  Select your destiny or let the High Court spin the brass wheel of retribution
+                </small>
+              </div>
+
+              <div className="court-roulette-options">
+                {(['mud', 'spinner', 'apology', 'password'] as const).map((type) => {
+                  const p = PUNISHMENTS[type];
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      className={`court-roulette-card ${selectedPunishment === type ? 'selected' : ''}`}
+                      onClick={() => {
+                        setSelectedPunishment(type);
+                        setRouletteAngle(p.angle);
+                        strikeGavel();
+                      }}
+                    >
+                      <strong>{p.title}</strong>
+                      <span className="text-amber-300 text-xs block font-bold">{p.subtitle}</span>
+                      <small>{p.description}</small>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="court-roulette-actions">
+                <button
+                  type="button"
+                  className="court-primary"
+                  onClick={spinRoulette}
+                  disabled={rouletteSpinning}
+                >
+                  {rouletteSpinning ? 'Wheel spinning…' : 'Spin Wheel of Judgment'}
+                </button>
+                <button
+                  type="button"
+                  className="court-primary"
+                  onClick={() => startPunishment(selectedPunishment)}
+                  disabled={rouletteSpinning}
+                >
+                  Serve Punishment: {PUNISHMENTS[selectedPunishment].title}{' '}
+                  <ArrowRight aria-hidden="true" size={18} />
+                </button>
+              </div>
+            </section>
+          ) : null}
+
+          {/* Phase 7A: Mud of Shame */}
+          {phase === 'mud' ? (
+            <section className="court-mud-console" aria-labelledby="mud-title">
+              <p>Punishment Execution · Public Humiliation</p>
+              <h2 id="mud-title">Mud of Shame</h2>
+              <div className="court-scorecard">
+                <span>Judges' Score</span>
+                <strong>{mudScore} / 10</strong>
+                <span>Splatter: Extra Sloppy</span>
+              </div>
+              <p className="text-sm max-w-xl mx-auto text-white/70">
+                The defendant has belly-flopped into the permanent judicial mud puddle. Deductions
+                applied for lack of splash aerodynamics.
+              </p>
+              <div className="mt-5 flex justify-center gap-3">
+                <button
+                  type="button"
+                  className="court-control"
+                  onClick={() => {
+                    const score = Number((1.5 + Math.random() * 2.5).toFixed(1));
+                    setMudScore(score);
+                    playCue('splash');
+                    strikeGavel();
+                  }}
+                >
+                  <RotateCcw size={16} /> Roll Again in Shame
+                </button>
+                <button type="button" className="court-primary" onClick={triggerAppeal}>
+                  File an Immediate Appeal <ArrowRight aria-hidden="true" size={18} />
+                </button>
+              </div>
+            </section>
+          ) : null}
+
+          {/* Phase 7B: Human Loading Spinner */}
+          {phase === 'spinner' ? (
+            <section className="court-spinner-console" aria-labelledby="spinner-title">
+              <p>Sentence: 404 Hours of Buffering</p>
+              <h2 id="spinner-title">Human Loading Spinner</h2>
+              <div className="court-spinner-track">
+                <div className="court-spinner-fill" style={{ width: `${spinnerProgress}%` }} />
+              </div>
+              <p className="text-sm text-cyan-300 font-mono">
+                Buffer Progress: {spinnerProgress}% · Estimated Time Remaining: 403h 59m 54s
+              </p>
+              <button
+                type="button"
+                className="court-spinner-dial"
+                onClick={() => {
+                  setSpinnerProgress((p) => Math.min(100, p + 18));
+                  playCue('spin');
+                }}
+              >
+                SPIN ME
+              </button>
+              <p className="text-xs text-white/50">
+                Click or drag the loading wheel rapidly to load your dignity back into memory!
+              </p>
+              <div className="mt-4 flex justify-center gap-3">
+                <button type="button" className="court-primary" onClick={triggerAppeal}>
+                  {spinnerProgress >= 100
+                    ? 'Buffer Complete: Appeal Sentence'
+                    : 'Abandon Buffering & Appeal'}{' '}
+                  <ArrowRight aria-hidden="true" size={18} />
+                </button>
+              </div>
+            </section>
+          ) : null}
+
+          {/* Phase 7C: Court-Ordered Apology */}
+          {phase === 'apology' ? (
+            <section className="court-apology-console" aria-labelledby="apology-title">
+              <p>Mandatory Pixel Penance</p>
+              <h2 id="apology-title">Court-Ordered Apology</h2>
+              <div className="court-apology-options">
+                {APOLOGY_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    className={`court-apology-button ${selectedApology === opt.id ? 'selected' : ''}`}
+                    onClick={() => {
+                      setSelectedApology(opt.id);
+                      setActiveLine({ speaker: opt.reactionSpeaker, text: opt.reactionText });
+                      void speakRef.current({
+                        speaker: opt.reactionSpeaker,
+                        text: opt.reactionText,
+                      });
+                      strikeGavel();
+                    }}
+                  >
+                    "{opt.text}"
+                  </button>
+                ))}
+              </div>
+              <div className="mt-4 flex justify-center gap-3">
+                <button type="button" className="court-primary" onClick={triggerAppeal}>
+                  Submit Apology & Appeal Sentence <ArrowRight aria-hidden="true" size={18} />
+                </button>
+              </div>
+            </section>
+          ) : null}
+
+          {phase === 'password' ? (
+            <PasswordPrison
+              onSentence={(outcome) =>
+                setPunishmentSentence(
+                  outcome === 'solved'
+                    ? 'Password Prison (Escaped with Samosa13!)'
+                    : 'Password Prison (Surrendered Credentials)',
+                )
+              }
+              onAppeal={triggerAppeal}
             />
+          ) : null}
+
+          {/* Phase 8: The Final Twist (Appeal Denied!) */}
+          {phase === 'appeal' ? (
+            <section className="court-appeal-console" role="status" aria-live="assertive">
+              <p className="text-red-400 font-black tracking-widest uppercase text-xs">
+                {appealReveal ? 'Supreme Court Final Ruling' : 'Judges consulting a Magic 8 Ball'}
+              </p>
+              <h2>{appealReveal ? 'APPEAL DENIED!' : 'DELIBERATING…'}</h2>
+              <p className="court-appeal-proclamation">
+                {appealReveal
+                  ? '“YOU ARE NOW BANNED FROM CLICKING FOR THREE BUSINESS CENTURIES!”'
+                  : 'The court has reviewed your appeal for almost one whole second.'}
+              </p>
+              <div className="mt-3">
+                {appealReveal ? (
+                  <button
+                    type="button"
+                    className="court-primary"
+                    onClick={() => setPhase('certificate')}
+                  >
+                    Accept Eternal Ban & View Certificate{' '}
+                    <ArrowRight aria-hidden="true" size={18} />
+                  </button>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
+        </main>
+      ) : null}
+
+      {/* Synchronized Subtitles with Speaker Labels */}
+      {phase !== 'certificate' ? (
+        <div className="court-subtitle" role="status" aria-live="polite">
+          {activeLine ? (
+            <>
+              <span>{SPEAKER_LABELS[activeLine.speaker]}</span>
+              <p>{activeLine.text}</p>
+            </>
+          ) : (
+            <p>
+              {muted
+                ? 'Court audio muted. Subtitles remain constitutionally protected.'
+                : 'The court is dramatically shuffling papers.'}
+            </p>
           )}
-
-          {phase === 'certificate' && verdict && (
-            <DigitalMenaceCertificate
-              certificateId={certificateIdForSession(sessionId)}
-              issuedAt={startedAt}
-              clickCount={summary.totalClicks}
-              verdict={verdict}
-              onReplay={() => {
-                audio.stop();
-                onReplay();
-              }}
-            />
-          )}
-        </section>
-      </main>
-    </div>
-  );
-}
-
-function CourtroomBackdrop({ phase }: { phase: TrialPhase }) {
-  return (
-    <div aria-hidden="true" className="pointer-events-none fixed inset-0 overflow-hidden">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(245,158,11,0.17),transparent_40rem),linear-gradient(180deg,#120a08,#070707)]" />
-      <div className="absolute inset-x-0 bottom-0 h-1/2 bg-[repeating-linear-gradient(90deg,rgba(120,53,15,0.1)_0_8%,transparent_8%_16%)]" />
-      <div className="absolute left-1/2 top-16 h-64 w-64 -translate-x-1/2 rounded-full bg-amber-300/8 blur-3xl" />
-      {phase === 'objection' && <div className="absolute inset-0 bg-red-700/20" />}
-    </div>
-  );
-}
-
-function Judge({ phase }: { phase: TrialPhase }) {
-  const dialogue =
-    phase === 'summons'
-      ? 'Order in the DOM. And somebody center that div.'
-      : phase === 'evidence'
-        ? 'The screenshots are blurry, but the audacity is in 4K.'
-        : phase === 'defense'
-          ? 'Counsel, choose your excuse with whatever dignity remains.'
-          : phase === 'verdict'
-            ? 'I have reached a verdict and also my lunch break.'
-            : 'The court is pretending to deliberate.';
-
-  return (
-    <div data-judge className="order-first text-center lg:order-none">
-      <div className="mx-auto w-fit rounded-[2rem] border border-amber-200/20 bg-[#21130d]/95 px-7 pb-5 pt-6 shadow-[0_28px_75px_rgba(0,0,0,0.62)]">
-        <div className="mx-auto grid size-24 place-items-center rounded-full border-4 border-amber-200/35 bg-[radial-gradient(circle_at_50%_35%,#fde68a,#92400e)] text-5xl shadow-[0_0_45px_rgba(251,191,36,0.2)]">
-          👩‍⚖️
         </div>
-        <p className="mt-3 text-xs font-black uppercase tracking-[0.22em] text-amber-300">
-          Hon. Justice Null Pointer
-        </p>
-        <p className="mt-3 max-w-md text-sm font-bold leading-6 text-amber-50/75">“{dialogue}”</p>
-      </div>
-      <div className="mx-auto h-8 w-[88%] rounded-b-xl bg-gradient-to-b from-amber-950 to-[#100704] shadow-2xl" />
+      ) : null}
+
+      {/* Phase 9: Menace Certificate */}
+      {phase === 'certificate' && verdict ? (
+        <div className="court-certificate-layer">
+          <DigitalMenaceCertificate
+            certificateId={certificateIdForSession(sessionId)}
+            issuedAt={startedAt}
+            clickCount={summary.totalClicks}
+            verdict={verdict}
+            punishment={punishmentSentence}
+            onReplay={() => {
+              cancelDirector();
+              stopAudio();
+              onReplay();
+            }}
+          />
+          <button
+            type="button"
+            className="court-secret-ending"
+            disabled={postCredits !== 'idle'}
+            onClick={() => void startPostCredits()}
+          >
+            {postCredits === 'idle'
+              ? 'Secret Ending'
+              : postCredits === 'playing'
+                ? 'Post-credits scene playing…'
+                : 'Secret ending unlocked'}
+          </button>
+          {postCredits !== 'idle' ? (
+            <section className={`court-post-credits is-${postCredits}`} aria-live="assertive">
+              <span>POST-CREDITS · COURT.EXE</span>
+              <strong>
+                {postCredits === 'complete'
+                  ? 'SOMEONE DOUBLE-CLICKED A PDF?! I QUIT!'
+                  : 'Judicial stability critically low…'}
+              </strong>
+            </section>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function Prosecutor({ phase, evidenceCount }: { phase: TrialPhase; evidenceCount: number }) {
-  const statement =
-    phase === 'defense'
-      ? 'The prosecution is prepared to object to all three options simultaneously.'
-      : phase === 'objection'
-        ? 'I object to the defendant having a personality!'
-        : `We have ${evidenceCount} clicks, motive, opportunity, and an extremely judgmental cursor.`;
-
-  return (
-    <aside
-      data-prosecutor
-      className="rounded-3xl border border-red-300/20 bg-red-950/35 p-5 backdrop-blur-lg"
-    >
-      <div className="flex items-center gap-3">
-        <div className="grid size-12 place-items-center rounded-2xl bg-red-400/15 text-2xl">🧑‍💼</div>
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-red-300">Prosecutor</p>
-          <p className="text-sm font-black">Ms. Terms &amp; Conditions</p>
-        </div>
-      </div>
-      <p className="mt-4 text-sm leading-6 text-white/60">“{statement}”</p>
-    </aside>
-  );
+function dialogueForPhase(
+  phase: TrialPhase,
+  verdictTitle?: string,
+  bribeChoice?: BribeChoice | null,
+  pleaChoice?: PleaChoice | null,
+): readonly SpokenLine[] {
+  if (phase === 'summons' || phase === 'news') return [];
+  if (phase === 'witness')
+    return [
+      { speaker: 'girlfriend', text: 'YOUR HONOR! I HAVE EVIDENCE!' },
+      { speaker: 'judge', text: 'Who are you?' },
+      {
+        speaker: 'girlfriend',
+        text: 'His girlfriend. Well, technically his localhost girlfriend. He never deployed our relationship.',
+      },
+      {
+        speaker: 'girlfriend',
+        text: "He promised me forever but couldn't even commit to one browser tab!",
+      },
+      { speaker: 'judge', text: "OBJECTION! That's actually devastating." },
+    ];
+  if (phase === 'breakup')
+    return [
+      {
+        speaker: 'girlfriend',
+        text: "And one more thing. I'm leaving you. Even your GitHub has more commitment.",
+      },
+      {
+        speaker: 'judge',
+        text: 'Let the record show: relationship status changed to detached HEAD.',
+      },
+    ];
+  if (phase === 'evidence')
+    return [
+      {
+        speaker: 'prosecutor',
+        text: 'I submit Exhibit A: A cursor caught lingering over a defenseless button with malicious confidence.',
+      },
+      {
+        speaker: 'judge',
+        text: 'The screenshots are blurry, but the sheer lack of remorse is in four K.',
+      },
+      { speaker: 'clerk', text: 'Exhibit entered. Dignity quotient recalculating to zero.' },
+    ];
+  if (phase === 'defense')
+    return [
+      {
+        speaker: 'defense',
+        text: 'Good news: I found three defenses. Bad news: I learned law from a cookie consent banner!',
+      },
+    ];
+  if (phase === 'objection')
+    return [
+      {
+        speaker: 'prosecutor',
+        text: 'Objection! The defense is attempting to blame a rectangle with batteries!',
+      },
+      { speaker: 'judge', text: 'Sustained! The rectangle has a cleaner record than you.' },
+    ];
+  if (phase === 'jury')
+    return [
+      { speaker: 'jury', text: 'GUILTY! GUILTY! GUILTY! GUILTY in six open tabs!' },
+      {
+        speaker: 'jury',
+        text: 'Tab seven votes innocent. Tab seven has crashed. Also, your attendance is seventy-five percent in a class that does not exist at IIT ISM.',
+      },
+    ];
+  if (phase === 'bribe')
+    return [
+      {
+        speaker: 'judge',
+        text: 'The court does not accept bribes. The court does, however, review tasteful gifts.',
+      },
+    ];
+  if (phase === 'bribeResult') {
+    if (bribeChoice === 'samosa')
+      return [
+        { speaker: 'judge', text: 'BRIBE ACCEPTED! SENTENCE DOUBLED!' },
+        { speaker: 'prosecutor', text: 'Your Honor just deep-fried due process.' },
+      ];
+    if (bribeChoice === 'star')
+      return [
+        { speaker: 'judge', text: 'A GitHub star? I only accept forks with no merge conflicts.' },
+        { speaker: 'prosecutor', text: 'Bribery attempt rejected for insufficient engagement.' },
+      ];
+    return [
+      { speaker: 'judge', text: 'Ten rupees? That barely covers one judicial chai pixel.' },
+      { speaker: 'prosecutor', text: 'Adding one count of budget corruption.' },
+    ];
+  }
+  if (phase === 'rage')
+    return [
+      { speaker: 'judge', text: 'ENOUGH! My wig has rage-quit before I could!' },
+      { speaker: 'jury', text: 'The tabs are panicking! Somebody restore the previous session!' },
+    ];
+  if (phase === 'mouse')
+    return [
+      {
+        speaker: 'mouse',
+        text: 'I am the mouse. He clicked me thirteen times without so much as a coffee break.',
+      },
+      { speaker: 'judge', text: 'Powerful testimony. Give that mouse a ergonomic pension.' },
+    ];
+  if (phase === 'verdict')
+    return [
+      {
+        speaker: 'judge',
+        text: `${verdictTitle ?? 'Guilty'}. Please remain seated while your dignity is permanently cached.`,
+      },
+      {
+        speaker: 'clerk',
+        text: 'Guilty verdict logged. Prepare the punishment roulette wheel.',
+      },
+    ];
+  if (phase === 'sponsor')
+    return [
+      {
+        speaker: 'sponsor',
+        text: 'This guilty verdict is sponsored by Ctrl Alt Deceit, the keyboard shortcut for avoiding accountability!',
+      },
+      { speaker: 'judge', text: 'I hate that this court has ad-supported justice.' },
+    ];
+  if (phase === 'plea')
+    return [
+      {
+        speaker: 'judge',
+        text: 'Choose your plea bargain: four hundred four years of buffering, or one unskippable ad every time you blink.',
+      },
+    ];
+  if (phase === 'pleaResult')
+    return pleaChoice === 'buffering'
+      ? [
+          {
+            speaker: 'judge',
+            text: 'Buffering selected. Your release date is currently loading at zero percent.',
+          },
+        ]
+      : [
+          {
+            speaker: 'sponsor',
+            text: 'Ad sentence selected. Blinking now requires accepting all cookies.',
+          },
+        ];
+  if (phase === 'secret')
+    return [
+      { speaker: 'defendant', text: "I'm innocent! I'm innocent! I'm innocent!" },
+      {
+        speaker: 'judge',
+        text: 'FINAL MELTDOWN! Innocence has been rate-limited. Bailiff, uninstall the defendant!',
+      },
+    ];
+  if (phase === 'roulette')
+    return [
+      {
+        speaker: 'judge',
+        text: 'Spin the wheel of judgment, convict! Let fate decide your public humiliation!',
+      },
+    ];
+  if (phase === 'mud')
+    return [
+      {
+        speaker: 'judge',
+        text: 'Three points deducted! The mud showed more commitment to that landing than you did!',
+      },
+      {
+        speaker: 'prosecutor',
+        text: 'For the record, even the mud has requested emotional damages.',
+      },
+    ];
+  if (phase === 'spinner')
+    return [
+      {
+        speaker: 'judge',
+        text: 'Too slow! My dial-up in 1998 had more bandwidth than your wrist!',
+      },
+      {
+        speaker: 'defense',
+        text: 'Hang in there! We are buffering at approximately three pixels per second!',
+      },
+    ];
+  if (phase === 'apology')
+    return [
+      {
+        speaker: 'clerk',
+        text: 'The defendant will now recite court-mandated regret to the World Wide Web.',
+      },
+      {
+        speaker: 'defense',
+        text: 'Please speak clearly into the mic, and remember to blame JavaScript!',
+      },
+    ];
+  if (phase === 'appeal')
+    return [
+      {
+        speaker: 'judge',
+        text: 'APPEAL DENIED! YOU ARE NOW BANNED FROM CLICKING FOR THREE BUSINESS CENTURIES!',
+      },
+      {
+        speaker: 'prosecutor',
+        text: 'The prosecution accepts this victory and the defendant’s remaining browser cookies.',
+      },
+    ];
+  return [];
 }
 
-function CourtClerk({ exhibitCount }: { exhibitCount: number }) {
-  return (
-    <aside className="rounded-3xl border border-cyan-300/15 bg-cyan-950/20 p-5 backdrop-blur-lg">
-      <div className="flex items-center gap-3">
-        <ScrollText aria-hidden="true" className="text-cyan-300" />
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-300">
-            Court clerk
-          </p>
-          <p className="text-sm font-black">Exhibit.exe</p>
-        </div>
-      </div>
-      <p className="mt-4 text-sm leading-6 text-white/55">
-        {exhibitCount} premium exhibits selected. Printer jam classified as hostile witness.
-      </p>
-    </aside>
-  );
-}
-
-function SummonsScene({
-  evidenceCount,
-  onContinue,
-}: {
-  evidenceCount: number;
-  onContinue(this: void): void;
-}) {
-  return (
-    <div className="mx-auto max-w-4xl rounded-[2rem] border border-amber-200/20 bg-black/35 p-6 text-center backdrop-blur-xl sm:p-9">
-      <p className="text-xs font-black uppercase tracking-[0.3em] text-amber-300">
-        Case opened automatically
-      </p>
-      <h1 className="mt-4 text-4xl font-black tracking-[-0.05em] sm:text-6xl">
-        The Website v. Your Clicking Finger
-      </h1>
-      <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-white/60">
-        The collapsed interface has reorganized itself into a court because therapy was outside the
-        sprint scope. {evidenceCount} interactions are now under oath.
-      </p>
-      <button
-        type="button"
-        onClick={onContinue}
-        className="mt-7 inline-flex min-h-12 items-center gap-2 rounded-full bg-amber-200 px-6 py-3 text-sm font-black text-amber-950 focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-amber-200"
-      >
-        <Gavel aria-hidden="true" size={18} />
-        Face the extremely online judge
-      </button>
-    </div>
-  );
-}
-
-function EvidenceScene({
+function EvidenceConsole({
   summary,
   exhibits,
   onContinue,
@@ -395,118 +1508,73 @@ function EvidenceScene({
   onContinue(this: void): void;
 }) {
   const metrics = [
-    ['Clicks entered into evidence', summary.totalClicks],
-    ['Suspicious cursor incidents', summary.cursorIncidents],
-    ['Emergency escape attempts', summary.escapeAttempts],
+    ['Clicks', summary.totalClicks],
+    ['Cursor incidents', summary.cursorIncidents],
+    ['Escape attempts', summary.escapeAttempts],
     ['Failed innocence tests', summary.failedInnocenceTests],
   ] as const;
-
   return (
-    <div className="rounded-[2rem] border border-amber-200/15 bg-black/35 p-5 backdrop-blur-xl sm:p-8">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <section className="court-evidence-console" aria-labelledby="evidence-title">
+      <div className="court-console-heading">
+        <div>
+          <p>Evidence hologram · actual Zustand history</p>
+          <h2 id="evidence-title">The click trail testifies</h2>
+        </div>
+        <button type="button" className="court-primary" onClick={onContinue}>
+          Attempt a legally questionable defense <ArrowRight aria-hidden="true" size={18} />
+        </button>
+      </div>
+      <div className="court-metrics">
         {metrics.map(([label, value]) => (
-          <div key={label} className="rounded-2xl border border-white/10 bg-white/[0.045] p-4">
-            <p className="text-3xl font-black text-amber-200">{value}</p>
-            <p className="mt-2 text-xs leading-5 text-white/45">{label}</p>
+          <div key={label}>
+            <strong>{value}</strong>
+            <span>{label}</span>
           </div>
         ))}
       </div>
-
-      <ol className="mt-6 grid gap-3 lg:grid-cols-5">
+      <ol className="court-exhibit-strip">
         {exhibits.map((record) => (
-          <li key={record.id} className="rounded-2xl border border-red-300/15 bg-red-950/20 p-4">
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-300">
-              Exhibit {record.sequence}
-            </p>
-            <p className="mt-2 text-sm font-black text-white">
-              {record.metadata?.label ?? record.type.replaceAll('-', ' ')}
-            </p>
-            <p className="mt-2 text-[11px] uppercase tracking-wider text-white/30">
+          <li key={record.id}>
+            <span>Exhibit {record.sequence}</span>
+            <strong>{String(record.metadata?.label ?? record.type).replaceAll('-', ' ')}</strong>
+            <small>
               {record.type.replaceAll('-', ' ')} · {record.stageAfter}
-            </p>
+            </small>
           </li>
         ))}
       </ol>
-
-      <div className="mt-6 text-center">
-        <button
-          type="button"
-          onClick={onContinue}
-          className="inline-flex min-h-11 items-center gap-2 rounded-full bg-amber-200 px-5 py-3 text-sm font-black text-amber-950 focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-amber-200"
-        >
-          Attempt a legally questionable defense
-          <ArrowRight aria-hidden="true" size={17} />
-        </button>
-      </div>
-    </div>
+    </section>
   );
 }
 
-function DefenseScene({ onChoose }: { onChoose(this: void, defense: DefenseId): void }) {
+function DefenseConsole({ onChoose }: { onChoose(this: void, defense: DefenseId): void }) {
   return (
-    <div className="mx-auto max-w-5xl rounded-[2rem] border border-cyan-200/15 bg-black/40 p-6 backdrop-blur-xl sm:p-8">
-      <div className="text-center">
-        <ShieldQuestion aria-hidden="true" className="mx-auto text-cyan-300" size={38} />
-        <p className="mt-3 text-xs font-black uppercase tracking-[0.26em] text-cyan-300">
-          Choose counsel wisely
-        </p>
-        <h2 className="mt-3 text-3xl font-black tracking-[-0.04em] sm:text-5xl">
-          How do you plead?
-        </h2>
-      </div>
-      <div className="mt-7 grid gap-4 md:grid-cols-3">
+    <section className="court-defense-console" aria-labelledby="defense-title">
+      <p>Your court-appointed tab is sweating</p>
+      <h2 id="defense-title">Choose a defense</h2>
+      <div>
         {DEFENSE_OPTIONS.map((option, index) => (
-          <button
-            key={option.id}
-            type="button"
-            onClick={() => onChoose(option.id)}
-            className="group min-h-52 rounded-3xl border border-white/10 bg-white/[0.045] p-5 text-left transition hover:-translate-y-2 hover:border-cyan-200/45 hover:bg-cyan-200/10 focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-cyan-200 motion-reduce:transform-none"
-          >
-            <span className="grid size-10 place-items-center rounded-xl bg-cyan-300 text-sm font-black text-cyan-950">
-              {index + 1}
-            </span>
-            <span className="mt-6 block text-xl font-black text-white">{option.label}</span>
-            <span className="mt-3 block text-sm leading-6 text-white/45">{option.legalTheory}</span>
+          <button key={option.id} type="button" onClick={() => onChoose(option.id)}>
+            <span>0{index + 1}</span>
+            <strong>{option.label}</strong>
+            <small>{option.legalTheory}</small>
           </button>
         ))}
       </div>
-    </div>
+    </section>
   );
 }
 
-function VerdictScene({
-  verdict,
-  onCertificate,
-}: {
-  verdict: NonNullable<ReturnType<typeof getVerdict>>;
-  onCertificate(this: void): void;
-}) {
+function CourtroomFallback({ loading = false }: { loading?: boolean }) {
   return (
-    <div className="mx-auto max-w-5xl overflow-hidden rounded-[2.25rem] border border-red-300/25 bg-[linear-gradient(135deg,rgba(69,10,10,0.88),rgba(9,9,11,0.94))] shadow-[0_35px_110px_rgba(0,0,0,0.7)]">
-      <div className="border-b border-red-300/15 bg-red-400 px-6 py-3 text-center text-xs font-black uppercase tracking-[0.3em] text-red-950">
-        Verdict entered into the permanent browser history
-      </div>
-      <div className="p-6 text-center sm:p-10">
-        <BadgeAlert aria-hidden="true" className="mx-auto text-red-300" size={46} />
-        <h2 className="mt-5 text-4xl font-black tracking-[-0.055em] sm:text-6xl">
-          {verdict.title}
-        </h2>
-        <p className="mx-auto mt-5 max-w-3xl text-base leading-7 text-white/65">{verdict.ruling}</p>
-        <div className="mx-auto mt-7 max-w-3xl rounded-2xl border border-amber-200/20 bg-amber-200/8 p-5 text-left">
-          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-300">
-            Sentence
-          </p>
-          <p className="mt-2 text-sm font-bold leading-6 text-amber-50">{verdict.sentence}</p>
-        </div>
-        <button
-          type="button"
-          onClick={onCertificate}
-          className="mt-7 inline-flex min-h-12 items-center gap-2 rounded-full bg-amber-200 px-6 py-3 text-sm font-black text-amber-950 focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-amber-200"
-        >
-          Issue my Digital Menace certificate
-          <ArrowRight aria-hidden="true" size={17} />
-        </button>
-      </div>
+    <div className="court-webgl-fallback">
+      <div className="court-fallback-bench" />
+      <div className="court-fallback-judge" />
+      <p>
+        {loading
+          ? 'Assembling twelve polygons of judgment…'
+          : 'WebGL recused itself. The trial remains fully playable.'}
+      </p>
     </div>
   );
 }
